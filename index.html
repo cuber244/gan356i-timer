@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GAN Cube Smart Timer</title>
+    <script type="module" src="https://cdn.cubing.net/js/cubing/twisty"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a2e;
+            color: #ffffff;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            padding: 15px;
+            text-align: center;
+            width: 100%;
+            background: #16213e;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .main-layout {
+            display: flex;
+            flex: 1;
+            width: 100%;
+            max-width: 1200px;
+            padding: 20px;
+            box-sizing: border-box;
+            gap: 20px;
+        }
+
+        .visualizer-area {
+            flex: 2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, #243447 0%, #1a1a2e 100%);
+            border-radius: 20px;
+            position: relative;
+        }
+
+        twisty-player {
+            width: 100%;
+            height: 100%;
+            --background: none; 
+        }
+
+        .info-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .card {
+            background: #0f3460;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #16213e;
+        }
+
+        h2 { font-size: 1rem; margin-top: 0; color: #48abe0; margin-bottom: 10px; }
+
+        /* --- タイマー＆スクランブル --- */
+        #scrambleDisplay {
+            font-size: 1.2rem;
+            color: #fff;
+            margin-bottom: 15px;
+            min-height: 3rem;
+            line-height: 1.8;
+            word-wrap: break-word;
+            background: #16213e;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        #timerDisplay {
+            font-size: 3.5rem;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            color: #ffffff;
+            margin: 5px 0;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        #ao5Display {
+            font-size: 1.2rem;
+            font-family: 'Courier New', Courier, monospace;
+            text-align: center;
+            color: #48abe0;
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+        
+        /* アシスト機能用の装飾クラス */
+        .scramble-step {
+            display: inline-block;
+            margin: 0 3px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+        }
+        .scramble-completed { color: #555; text-decoration: line-through; }
+        .scramble-current {
+            background-color: #f39c12;
+            color: #fff;
+            font-size: 1.4rem;
+            font-weight: bold;
+            transform: scale(1.1);
+            box-shadow: 0 0 8px rgba(243, 156, 18, 0.8);
+        }
+        .scramble-pending { color: #aaa; }
+        
+        .scramble-correction {
+            background-color: #e74c3c;
+            color: #fff;
+            font-size: 1.5rem;
+            font-weight: bold;
+            transform: scale(1.15);
+            box-shadow: 0 0 12px rgba(231, 76, 60, 0.8);
+        }
+        .scramble-correction-queue {
+            color: #e74c3c;
+            opacity: 0.7;
+            font-size: 1.1rem;
+        }
+        
+        /* --- ステータス・ボタン --- */
+        .status-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+        .status-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+        .status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; background: #e94560; }
+        .connected { background: #0fdb92; }
+
+        #moveLog {
+            font-family: monospace;
+            background: #16213e;
+            padding: 10px;
+            height: 80px;
+            overflow-y: auto;
+            border-radius: 4px;
+            font-size: 1.2rem;
+            color: #f7d138;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #48abe0;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.1s;
+        }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
+
+        #scrambleBtn { background: #9b59b6; margin-bottom: 10px;}
+        #syncBtn { background: #27ae60; margin-bottom: 8px; }
+        #resetBtn { background: #c0392b; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1 style="margin: 0; font-size: 1.5rem;">GAN Cube Smart Timer</h1>
+</header>
+
+<div class="main-layout">
+    <div class="visualizer-area">
+        <twisty-player 
+            id="cubeVisualizer"
+            visualization="3D"
+            control-panel="none"
+            back-view="none"
+            background="none"
+            tempo-scale="3"
+        ></twisty-player>
+    </div>
+
+    <div class="info-area">
+        <div class="card">
+            <h2>⏱️ Solve Timer</h2>
+            <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
+            <div id="timerDisplay">0.00</div>
+            <div id="ao5Display">Ao5: --</div>
+            <button id="scrambleBtn">🎲 スクランブル生成</button>
+        </div>
+
+        <div class="card">
+            <h2>Connection Status</h2>
+            <div class="status-container">
+                <div class="status-row">
+                    <span>GAN Cube (Bluetooth)</span>
+                    <span id="statusBadge" class="status-badge">Disconnected</span>
+                </div>
+            </div>
+            <button id="connectBtn">Connect Smart Cube</button>
+        </div>
+
+        <div class="card">
+            <h2>Move History & Tools</h2>
+            <div id="moveLog">Waiting for moves...</div>
+            <div style="margin-top: 10px;">
+                <button id="syncBtn" disabled>🔄 物理キューブの盤面を再取得</button>
+                <button id="resetBtn">🗑️ 仮想キューブとタイマーをリセット</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { connectGanCube } from 'https://esm.sh/gan-web-bluetooth';
+
+    const connectBtn = document.getElementById('connectBtn');
+    const scrambleBtn = document.getElementById('scrambleBtn');
+    const syncBtn = document.getElementById('syncBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusBadge = document.getElementById('statusBadge');
+    const moveLog = document.getElementById('moveLog');
+    const scrambleDisplay = document.getElementById('scrambleDisplay');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const ao5Display = document.getElementById('ao5Display');
+    const twistyElement = document.getElementById('cubeVisualizer');
+
+    let cubeConnection = null;
+    let moveTimeout = null;
+    let lastFacelets = "";
+
+    // --- タイマー＆スクランブル用の変数 ---
+    let isReady = false;
+    let isSolving = false;
+    let startTime = 0;
+    let lastMoveTime = 0;
+    let timerInterval = null;
+
+    let scrambleSequence = [];
+    let currentScrambleStep = 0;
+    let isScrambling = false;
+    let mistakeStack = [];
+
+    let solveTimes = []; 
+    let lastManualMove = "";
+    let lastManualMoveTime = 0;
+
+    function formatTime(ms) {
+        return (ms / 1000).toFixed(2);
+    }
+
+    function updateAo5() {
+        if (solveTimes.length < 5) {
+            ao5Display.textContent = "Ao5: --";
+            return;
+        }
+        const last5 = solveTimes.slice(-5);
+        const min = Math.min(...last5);
+        const max = Math.max(...last5);
+        const sum = last5.reduce((a, b) => a + b, 0);
+        const avg = (sum - min - max) / 3;
+        
+        ao5Display.textContent = `Ao5: ${formatTime(avg)}`;
+    }
+
+    function checkIsSolved(faceletsStr) {
+        if (!faceletsStr) return false;
+        const cleanStr = faceletsStr.trim().toUpperCase().replace(/\s/g, '');
+        if (cleanStr.length !== 54) return false;
+        if (cleanStr === "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") return true;
+
+        for (let i = 0; i < 6; i++) {
+            const face = cleanStr.slice(i * 9, i * 9 + 9);
+            const firstChar = face[0];
+            for (let j = 1; j < 9; j++) {
+                if (face[j] !== firstChar) return false;
+            }
+        }
+        return true;
+    }
+
+    function generateSimpleScramble(length = 21) {
+        const faces = ['U', 'D', 'R', 'L', 'F', 'B'];
+        const modifiers = ['', "'"];
+        let scramble = [];
+        let lastFace = '';
+        let secondLastFace = '';
+
+        for (let i = 0; i < length; i++) {
+            let face;
+            do {
+                face = faces[Math.floor(Math.random() * faces.length)];
+            } while (
+                face === lastFace ||
+                (face === secondLastFace &&
+                 ((face === 'U' && lastFace === 'D') || (face === 'D' && lastFace === 'U') ||
+                  (face === 'R' && lastFace === 'L') || (face === 'L' && lastFace === 'R') ||
+                  (face === 'F' && lastFace === 'B') || (face === 'B' && lastFace === 'F')))
+            );
+
+            const modifier = modifiers[Math.floor(Math.random() * modifiers.length)];
+            scramble.push(face + modifier);
+            secondLastFace = lastFace;
+            lastFace = face;
+        }
+        return scramble;
+    }
+
+    function getInverseMove(move) {
+        if (move.endsWith("'")) return move[0]; 
+        else if (move.endsWith("2")) return move;    
+        else return move + "'"; 
+    }
+
+    function renderScrambleUI() {
+        scrambleDisplay.innerHTML = "";
+        
+        if (scrambleSequence.length === 0) {
+            scrambleDisplay.textContent = 'Push "Generate Scramble" or [ U U\' ]';
+            return;
+        }
+
+        if (mistakeStack.length > 0) {
+            const warningDiv = document.createElement('div');
+            warningDiv.style.color = '#e74c3c';
+            warningDiv.style.fontSize = '0.9rem';
+            warningDiv.style.marginBottom = '8px';
+            warningDiv.textContent = '⚠️ ミス検知: 元に戻すために以下の順で回してください';
+            scrambleDisplay.appendChild(warningDiv);
+
+            const correctionDiv = document.createElement('div');
+            for (let i = mistakeStack.length - 1; i >= 0; i--) {
+                const span = document.createElement('span');
+                span.textContent = mistakeStack[i];
+                span.className = 'scramble-step';
+                
+                if (i === mistakeStack.length - 1) {
+                    span.classList.add('scramble-correction');
+                } else {
+                    span.classList.add('scramble-correction-queue');
+                }
+                correctionDiv.appendChild(span);
+            }
+            scrambleDisplay.appendChild(correctionDiv);
+            return; 
+        }
+
+        scrambleSequence.forEach((move, index) => {
+            const span = document.createElement('span');
+            span.textContent = move;
+            span.className = 'scramble-step';
+
+            if (index < currentScrambleStep) {
+                span.classList.add('scramble-completed');
+            } else if (index === currentScrambleStep) {
+                span.classList.add('scramble-current');
+            } else {
+                span.classList.add('scramble-pending');
+            }
+            scrambleDisplay.appendChild(span);
+        });
+    }
+
+    // --- 各種ボタン処理 ---
+    scrambleBtn.addEventListener('click', () => {
+        scrambleSequence = generateSimpleScramble(21);
+        currentScrambleStep = 0;
+        isScrambling = true;
+        mistakeStack = []; 
+        
+        twistyElement.alg = "";
+        twistyElement.removeAttribute('facelets');
+        lastFacelets = "";
+        moveLog.textContent = "スクランブルを開始してください...";
+
+        renderScrambleUI();
+
+        isReady = false;
+        isSolving = false;
+        clearInterval(timerInterval);
+        timerDisplay.textContent = "0.00";
+        timerDisplay.style.color = "#ffffff";
+    });
+
+    resetBtn.addEventListener('click', () => {
+        twistyElement.alg = "";
+        twistyElement.removeAttribute('facelets');
+        moveLog.textContent = "Waiting for moves...";
+        lastFacelets = "";
+        
+        isReady = false;
+        isSolving = false;
+        isScrambling = false;
+        scrambleSequence = [];
+        mistakeStack = []; 
+        clearInterval(timerInterval);
+        timerDisplay.textContent = "0.00";
+        timerDisplay.style.color = "#ffffff";
+        renderScrambleUI();
+    });
+
+    syncBtn.addEventListener('click', async () => {
+        if (cubeConnection && typeof cubeConnection.sendCubeCommand === 'function') {
+            try { await cubeConnection.sendCubeCommand({ type: "REQUEST_FACELETS" }); } catch(e) {}
+        }
+    });
+
+    // --- GAN Cube 接続 ---
+    connectBtn.addEventListener('click', async () => {
+        try {
+            statusBadge.textContent = "Connecting...";
+            statusBadge.className = "status-badge connecting";
+            
+            cubeConnection = await connectGanCube();
+            
+            statusBadge.textContent = "Connected";
+            statusBadge.className = "status-badge connected";
+            connectBtn.disabled = true;
+            syncBtn.disabled = false;
+
+            setTimeout(async () => {
+                if (cubeConnection && typeof cubeConnection.sendCubeCommand === 'function') {
+                    await cubeConnection.sendCubeCommand({ type: "REQUEST_FACELETS" });
+                }
+            }, 1000);
+
+            cubeConnection.events$.subscribe((event) => {
+                switch (event.type) {
+                    case "MOVE":
+                        const now = Date.now();
+
+                        // ジェスチャー検知
+                        if (!isScrambling && !isSolving && !isReady) {
+                            if ((event.move === "U'" && lastManualMove === "U") ||
+                                (event.move === "U" && lastManualMove === "U'")) {
+                                if (now - lastManualMoveTime <= 1000) {
+                                    scrambleBtn.click();
+                                    lastManualMove = "";
+                                    lastManualMoveTime = 0;
+                                    return; 
+                                }
+                            }
+                            lastManualMove = event.move;
+                            lastManualMoveTime = now;
+                        }
+
+                        lastMoveTime = now;
+                        let scrambleCompletedThisTurn = false;
+
+                        if (isScrambling) {
+                            if (mistakeStack.length > 0) {
+                                const expectedCorrection = mistakeStack[mistakeStack.length - 1];
+                                if (event.move === expectedCorrection) {
+                                    mistakeStack.pop();
+                                } else {
+                                    mistakeStack.push(getInverseMove(event.move));
+                                }
+                                renderScrambleUI();
+                            } else {
+                                const expectedMove = scrambleSequence[currentScrambleStep];
+                                if (event.move === expectedMove) {
+                                    currentScrambleStep++;
+                                    if (currentScrambleStep >= scrambleSequence.length) {
+                                        scrambleCompletedThisTurn = true;
+                                        isScrambling = false;
+                                        isReady = true;
+                                        scrambleDisplay.innerHTML = "<span style='color:#f39c12;'>スクランブル完了！手を動かすとタイマーがスタートします</span>";
+                                        timerDisplay.style.color = "#f39c12"; 
+                                        moveLog.textContent = "Ready...";
+                                    } else {
+                                        renderScrambleUI();
+                                    }
+                                } else {
+                                    mistakeStack.push(getInverseMove(event.move));
+                                    renderScrambleUI();
+                                }
+                            }
+                        }
+
+                        // タイマースタート処理
+                        if (isReady && !isSolving && !isScrambling && !scrambleCompletedThisTurn) {
+                            isSolving = true;
+                            isReady = false;
+                            startTime = now;
+                            timerDisplay.style.color = "#ffffff";
+                            timerInterval = setInterval(() => {
+                                timerDisplay.textContent = formatTime(Date.now() - startTime);
+                            }, 10);
+                        }
+
+                        if (moveLog.textContent.includes("Waiting") || moveLog.textContent.includes("Ready") || moveLog.textContent.includes("スクランブルを開始")) {
+                            moveLog.textContent = "";
+                        }
+                        moveLog.textContent += event.move + " ";
+                        moveLog.scrollTop = moveLog.scrollHeight;
+
+                        try { twistyElement.experimentalAddMove(event.move); } catch (e) {}
+
+                        clearTimeout(moveTimeout);
+                        moveTimeout = setTimeout(async () => {
+                            if (cubeConnection && typeof cubeConnection.sendCubeCommand === 'function') {
+                                try { await cubeConnection.sendCubeCommand({ type: "REQUEST_FACELETS" }); } catch(e) {}
+                            }
+                        }, 300);
+                        break;
+
+                    case "FACELETS":
+                        if (isSolving && checkIsSolved(event.facelets)) {
+                            clearInterval(timerInterval);
+                            isSolving = false;
+                            
+                            const finalTime = lastMoveTime - startTime;
+                            timerDisplay.textContent = formatTime(finalTime);
+                            timerDisplay.style.color = "#0fdb92"; 
+                            
+                            solveTimes.push(finalTime);
+                            updateAo5();
+                        }
+
+                        if (event.facelets === lastFacelets) break; 
+                        lastFacelets = event.facelets;
+                        
+                        try { twistyElement.facelets = event.facelets; } catch(e) {}
+                        break;
+                }
+            });
+
+        } catch (error) {
+            alert("接続に失敗しました: " + error.message);
+        }
+    });
+</script>
+
+</body>
+</html>
