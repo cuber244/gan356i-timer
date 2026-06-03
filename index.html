@@ -3,92 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GAN Cube Smart Timer</title>
+    <title>GAN Cube Smart Timer Pro</title>
     <script type="module" src="https://cdn.cubing.net/js/cubing/twisty"></script>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #1a1a2e;
-            color: #ffffff;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 10px;
-            box-sizing: border-box;
-        }
-
-        header {
-            padding: 10px;
-            text-align: center;
-            width: 100%;
-            max-width: 500px;
-            background: #16213e;
-            border-radius: 12px;
-            margin-bottom: 10px;
-        }
-
-        .main-layout {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 500px;
-            gap: 15px;
-        }
-
-        .visualizer-area {
-            width: 100%;
-            height: 300px;
-            background: radial-gradient(circle, #243447 0%, #1a1a2e 100%);
-            border-radius: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a2e; color: #ffffff; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 10px; box-sizing: border-box; overflow-x: hidden; }
+        header { padding: 10px; text-align: center; width: 100%; max-width: 500px; background: #16213e; border-radius: 12px; margin-bottom: 10px; }
+        .main-layout { display: flex; flex-direction: column; width: 100%; max-width: 500px; gap: 10px; }
+        .visualizer-area { width: 100%; height: 260px; background: radial-gradient(circle, #243447 0%, #1a1a2e 100%); border-radius: 20px; display: flex; justify-content: center; align-items: center; position: relative; }
         twisty-player { width: 100%; height: 100%; }
-
         .info-area { width: 100%; display: flex; flex-direction: column; gap: 10px; }
-
         .card { background: #0f3460; padding: 12px; border-radius: 12px; }
-
         h2 { font-size: 0.9rem; margin-top: 0; color: #48abe0; margin-bottom: 8px; }
+        
+        #scrambleDisplay { font-size: 0.95rem; min-height: 2.5rem; line-height: 1.4; background: #16213e; padding: 8px; border-radius: 8px; text-align: center; word-break: break-all; }
+        
+        .timer-container { padding: 10px 0; border-radius: 8px; }
+        #timerDisplay { font-size: 4rem; font-family: 'Courier New', Courier, monospace; text-align: center; margin: 0; font-weight: bold; transition: color 0.2s; }
+        #timerSubtext { text-align: center; font-size: 0.8rem; color: #f39c12; min-height: 1rem; margin-top: -5px; }
 
-        #scrambleDisplay {
-            font-size: 1rem;
-            min-height: 2.5rem;
-            line-height: 1.4;
-            background: #16213e;
-            padding: 8px;
-            border-radius: 8px;
-            text-align: center;
-            word-break: break-all;
-        }
-        #timerDisplay { font-size: 3rem; font-family: 'Courier New', Courier, monospace; text-align: center; margin: 5px 0; font-weight: bold; }
-        #ao5Display { font-size: 1.1rem; text-align: center; color: #48abe0; margin-bottom: 10px; }
+        .penalty-group { display: flex; justify-content: center; gap: 10px; margin-top: 10px; visibility: hidden; }
+        .pen-btn { padding: 6px 15px; border-radius: 20px; border: none; font-weight: bold; background: #2c3e50; color: white; cursor: pointer; }
+        .pen-btn.active { background: #e74c3c; box-shadow: 0 0 8px rgba(231,76,60,0.6); }
+        .pen-btn.ok-active { background: #27ae60; box-shadow: 0 0 8px rgba(39,174,96,0.6); }
 
-        .scramble-step { display: inline-block; margin: 0 3px; padding: 2px 6px; border-radius: 4px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; text-align: center; font-size: 0.85rem; margin-top: 10px; background: #16213e; padding: 10px; border-radius: 8px; }
+        .stat-box span { display: block; font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 1.1rem; color: #48abe0; }
+        .stat-label { font-size: 0.7rem; color: #bdc3c7; }
+
+        .scramble-step { display: inline-block; margin: 0 3px; padding: 2px 5px; border-radius: 4px; }
         .scramble-completed { color: #555; text-decoration: line-through; }
         .scramble-current { background-color: #f39c12; color: #fff; font-weight: bold; transform: scale(1.1); }
-        .scramble-correction { background-color: #e74c3c; color: #fff; font-weight: bold; }
-        .scramble-correction-queue { color: #e74c3c; opacity: 0.7; }
+        .scramble-correction { background-color: #e74c3c; color: #fff; font-weight: bold; font-size: 1.2rem; padding: 2px 6px; border-radius: 4px; }
+        .scramble-correction-queue { color: #e74c3c; opacity: 0.6; font-size: 0.85rem; }
 
-        .status-container { display: flex; flex-direction: column; gap: 5px; }
-        .status-row { display: flex; justify-content: space-between; font-size: 0.85rem; }
         .status-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; background: #e94560; }
         .connected { background: #0fdb92; }
 
-        button { width: 100%; padding: 15px; border: none; border-radius: 10px; background: #48abe0; color: white; font-weight: bold; font-size: 1rem; margin-top: 5px; }
-
-        #moveLog { font-family: monospace; background: #16213e; padding: 8px; height: 60px; overflow-y: auto; border-radius: 4px; font-size: 1rem; color: #f7d138; }
+        button.main-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; background: #48abe0; color: white; font-weight: bold; font-size: 1rem; margin-top: 5px; cursor: pointer; }
+        button:disabled { opacity: 0.5; background: #555; }
+        #moveLog { font-family: monospace; background: #16213e; padding: 6px; height: 50px; overflow-y: auto; border-radius: 4px; font-size: 0.9rem; color: #f7d138; }
     </style>
 </head>
 <body>
 
-<header>
-    <h1 style="margin: 0; font-size: 1.2rem;">GAN Cube Smart Timer</h1>
-</header>
+<header><h1 style="margin: 0; font-size: 1.2rem;">GAN Cube Smart Timer Pro</h1></header>
 
 <div class="main-layout">
     <div class="visualizer-area">
@@ -99,132 +57,378 @@
         <div class="card">
             <h2>⏱️ Solve Timer</h2>
             <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
-            <div id="timerDisplay">0.00</div>
-            <div id="ao5Display">Ao5: --</div>
-            <button id="scrambleBtn">🎲 スクランブル生成</button>
-        </div>
-
-        <div class="card">
-            <h2>Connection Status</h2>
-            <div class="status-container">
-                <div class="status-row">
-                    <span>GAN Cube (Bluetooth)</span>
-                    <span id="statusBadge" class="status-badge">Disconnected</span>
-                </div>
+            
+            <div class="timer-container" id="timerArea">
+                <div id="timerDisplay">0.00</div>
+                <div id="timerSubtext"></div>
             </div>
-            <button id="connectBtn">Connect Smart Cube</button>
+
+            <div class="penalty-group" id="penaltyGroup">
+                <button class="pen-btn ok-active" id="btnOk">OK</button>
+                <button class="pen-btn" id="btnPlus2">+2</button>
+                <button class="pen-btn" id="btnDnf">DNF</button>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box"><div class="stat-label">PB</div><span id="statPb">--</span></div>
+                <div class="stat-box"><div class="stat-label">Ao5</div><span id="statAo5">--</span></div>
+                <div class="stat-box"><div class="stat-label">Ao12</div><span id="statAo12">--</span></div>
+                <div class="stat-box"><div class="stat-label">Best</div><span id="statBest">--</span></div>
+                <div class="stat-box"><div class="stat-label">Worst</div><span id="statWorst">--</span></div>
+                <div class="stat-box"><div class="stat-label">Solves</div><span id="statCount">0</span></div>
+            </div>
+
+            <button class="main-btn" id="scrambleBtn" style="background: #9b59b6;">🎲 スクランブル生成</button>
         </div>
 
-        <div class="card">
-            <h2>Tools</h2>
-            <div id="moveLog">Waiting for moves...</div>
-            <button id="syncBtn" disabled>🔄 物理キューブの盤面を再取得</button>
-            <button id="resetBtn" style="background:#c0392b;">🗑️ リセット</button>
+        <div class="card" style="display: flex; gap: 10px;">
+            <div style="flex: 1;">
+                <h2>Connection</h2>
+                <span id="statusBadge" class="status-badge">Disconnected</span>
+                <button class="main-btn" id="connectBtn" style="padding: 8px;">Connect</button>
+            </div>
+            <div style="flex: 1;">
+                <h2>Tools</h2>
+                <button class="main-btn" id="resetBtn" style="background:#f39c12; padding: 8px; margin-top: 0;">仮想キューブをリセット</button>
+                <button class="main-btn" id="clearSessionBtn" style="background:#c0392b; padding: 8px;">履歴クリア</button>
+            </div>
         </div>
+        <div id="moveLog">Waiting for moves...</div>
     </div>
 </div>
 
 <script type="module">
+    window.onerror = function(msg, url, line) { alert("Error: " + msg + "\nLine: " + line); return false; };
+
     import { connectGanCube } from 'https://esm.sh/gan-web-bluetooth';
 
-    const connectBtn = document.getElementById('connectBtn');
-    const scrambleBtn = document.getElementById('scrambleBtn');
-    const syncBtn = document.getElementById('syncBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const statusBadge = document.getElementById('statusBadge');
-    const moveLog = document.getElementById('moveLog');
-    const scrambleDisplay = document.getElementById('scrambleDisplay');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const ao5Display = document.getElementById('ao5Display');
-    const twistyElement = document.getElementById('cubeVisualizer');
+    // --- Audio System ---
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
 
-    let cubeConnection = null;
-    let startTime = 0, lastMoveTime = 0, timerInterval = null;
-    let isReady = false, isSolving = false, isScrambling = false;
-    let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
-    let solveTimes = [], lastManualMove = "", lastManualMoveTime = 0;
-
-    function formatTime(ms) { return (ms / 1000).toFixed(2); }
-
-    function updateAo5() {
-        if (solveTimes.length < 5) { ao5Display.textContent = "Ao5: --"; return; }
-        const last5 = solveTimes.slice(-5);
-        const avg = (last5.reduce((a,b)=>a+b,0) - Math.min(...last5) - Math.max(...last5)) / 3;
-        ao5Display.textContent = `Ao5: ${formatTime(avg)}`;
+    function initAudio() {
+        if (!audioCtx) audioCtx = new AudioContext();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
     }
 
-    function checkIsSolved(faceletsStr) {
-        if (!faceletsStr) return false;
-        const cleanStr = faceletsStr.trim().toUpperCase().replace(/\s/g, '');
+    function playBeep(freq, type = 'sine', dur = 0.2) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+    }
+
+    // --- DOM Elements ---
+    const getEl = id => document.getElementById(id);
+    const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'), 
+          resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'), 
+          btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf');
+    const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'), 
+          scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'), 
+          statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'), 
+          penaltyGroup = getEl('penaltyGroup');
+    
+    // --- State Variables ---
+    let cubeConnection = null;
+    let appState = 'IDLE'; 
+    let solveTimes = JSON.parse(localStorage.getItem('ganTimerSession')) || [];
+    
+    let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
+    let lastManualMove = "", lastManualMoveTime = 0;
+    
+    let inspectInterval = null;
+    let timerAnimationId = null; 
+    let startTime = 0, inspectStartTime = 0;
+    let inspectWarn8 = false, inspectWarn12 = false;
+    let currentSolvePenalty = ""; 
+
+    // --- Format & Stats Logic ---
+    function formatTime(ms) { return (ms / 1000).toFixed(2); }
+    function formatDisplay(solveObj) {
+        if (solveObj.penalty === 'DNF') return 'DNF';
+        if (solveObj.penalty === '+2') return formatTime(solveObj.timeMs + 2000) + '+';
+        return formatTime(solveObj.timeMs);
+    }
+    function getActualMs(solveObj) {
+        if (solveObj.penalty === 'DNF') return Infinity;
+        if (solveObj.penalty === '+2') return solveObj.timeMs + 2000;
+        return solveObj.timeMs;
+    }
+
+    function updateStats() {
+        localStorage.setItem('ganTimerSession', JSON.stringify(solveTimes));
+        getEl('statCount').textContent = solveTimes.length;
+        
+        if (solveTimes.length === 0) {
+            ['statPb','statAo5','statAo12','statBest','statWorst'].forEach(id => getEl(id).textContent = "--");
+            return;
+        }
+
+        const validMs = solveTimes.map(getActualMs);
+        const nonDnf = validMs.filter(ms => ms !== Infinity);
+        
+        getEl('statPb').textContent = nonDnf.length > 0 ? formatTime(Math.min(...nonDnf)) : "--";
+        getEl('statBest').textContent = nonDnf.length > 0 ? formatTime(Math.min(...nonDnf)) : "--";
+        getEl('statWorst').textContent = validMs.includes(Infinity) ? "DNF" : formatTime(Math.max(...validMs));
+
+        const calcAvg = (n) => {
+            if (solveTimes.length < n) return "--";
+            let slice = validMs.slice(-n);
+            if (slice.filter(m => m === Infinity).length > 1) return "DNF";
+            slice.sort((a,b) => a - b);
+            slice.pop(); slice.shift();
+            return formatTime(slice.reduce((a,b) => a + b, 0) / slice.length);
+        };
+        
+        getEl('statAo5').textContent = calcAvg(5);
+        getEl('statAo12').textContent = calcAvg(12);
+        
+        const last = solveTimes[solveTimes.length - 1];
+        btnOk.className = 'pen-btn ' + (last.penalty === '' ? 'ok-active' : '');
+        btnPlus2.className = 'pen-btn ' + (last.penalty === '+2' ? 'active' : '');
+        btnDnf.className = 'pen-btn ' + (last.penalty === 'DNF' ? 'active' : '');
+    }
+    updateStats();
+
+    // --- Game Logic ---
+    function generateScramble() {
+        const faces = ['U','D','R','L','F','B'], mods = ['',"\'"];
+        let scr = [], last = '', sec = '';
+        for (let i = 0; i < 21; i++) {
+            let f; 
+            do { f = faces[Math.floor(Math.random() * 6)]; } 
+            while (f === last || (f === sec && ((f==='U'&&last==='D')||(f==='D'&&last==='U')||(f==='R'&&last==='L')||(f==='L'&&last==='R')||(f==='F'&&last==='B')||(f==='B'&&last==='F'))));
+            scr.push(f + mods[Math.floor(Math.random() * 2)]); 
+            sec = last; last = f;
+        }
+        return scr;
+    }
+    function getInverse(m) { return m.endsWith("'") ? m[0] : m + "'"; }
+
+    function renderScrambleUI() {
+        if (appState !== 'SCRAMBLING') return;
+        
+        let htmlStr = "";
+        if (mistakeStack.length > 0) {
+            htmlStr += "<div style='color:#e74c3c; margin-bottom:5px;'>❌ 巻き戻し手順:</div>";
+            for (let i = mistakeStack.length - 1; i >= 0; i--) { 
+                const step = getInverse(mistakeStack[i]);
+                const className = (i === mistakeStack.length - 1) ? 'scramble-correction' : 'scramble-correction-queue';
+                htmlStr += `<span class="scramble-step ${className}">${step}</span>`;
+            }
+        } else {
+            scrambleSequence.forEach((m, i) => { 
+                let className = '';
+                if (i < currentScrambleStep) className = 'scramble-completed';
+                else if (i === currentScrambleStep) className = 'scramble-current';
+                htmlStr += `<span class="scramble-step ${className}">${m}</span>`;
+            });
+        }
+        scrambleDisplay.innerHTML = htmlStr;
+    }
+
+    function startRealtimeTimer() {
+        cancelAnimationFrame(timerAnimationId);
+        function update() {
+            if (appState === 'SOLVING') {
+                timerDisplay.textContent = formatTime(Date.now() - startTime);
+                timerAnimationId = requestAnimationFrame(update);
+            }
+        }
+        timerAnimationId = requestAnimationFrame(update);
+    }
+
+    function checkIsSolved(cleanStr) {
         if (cleanStr.length !== 54) return false;
         if (cleanStr === "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") return true;
-        for (let i = 0; i < 6; i++) {
-            const face = cleanStr.slice(i * 9, i * 9 + 9);
-            for (let j = 1; j < 9; j++) if (face[j] !== face[0]) return false;
+        
+        for (let i = 0; i < 6; i++) { 
+            const baseColor = cleanStr[i * 9];
+            for (let j = 1; j < 9; j++) { 
+                if (cleanStr[i * 9 + j] !== baseColor) return false;
+            }
         }
         return true;
     }
 
-    function generateSimpleScramble(length = 21) {
-        const faces = ['U', 'D', 'R', 'L', 'F', 'B'], modifiers = ['', "'"];
-        let scramble = [], last = '', sec = '';
-        for (let i = 0; i < length; i++) {
-            let f;
-            do { f = faces[Math.floor(Math.random() * faces.length)]; } while (f === last || (f === sec && ((f==='U'&&last==='D')||(f==='D'&&last==='U')||(f==='R'&&last==='L')||(f==='L'&&last==='R')||(f==='F'&&last==='B')||(f==='B'&&last==='F'))));
-            scramble.push(f + modifiers[Math.floor(Math.random() * modifiers.length)]);
-            sec = last; last = f;
-        }
-        return scramble;
-    }
-
-    function getInverse(m) { return m.endsWith("'") ? m[0] : (m.endsWith("2") ? m : m + "'"); }
-
-    function renderScrambleUI() {
-        scrambleDisplay.innerHTML = "";
-        if (scrambleSequence.length === 0) { scrambleDisplay.textContent = 'Push "Generate Scramble" or [ U U\' ]'; return; }
-        if (mistakeStack.length > 0) {
-            const d = document.createElement('div'); d.style.color = '#e74c3c'; d.textContent = '⚠️ ミス検知: 元に戻してください'; scrambleDisplay.appendChild(d);
-            for (let i = mistakeStack.length - 1; i >= 0; i--) { const s = document.createElement('span'); s.textContent = mistakeStack[i]; s.className = 'scramble-step ' + (i===mistakeStack.length-1?'scramble-correction':'scramble-correction-queue'); scrambleDisplay.appendChild(s); }
-            return;
-        }
-        scrambleSequence.forEach((m, i) => { const s = document.createElement('span'); s.textContent = m; s.className = 'scramble-step ' + (i<currentScrambleStep?'scramble-completed':(i===currentScrambleStep?'scramble-current':'scramble-pending')); scrambleDisplay.appendChild(s); });
-    }
-
+    // --- Actions ---
     scrambleBtn.addEventListener('click', () => {
-        scrambleSequence = generateSimpleScramble(21); currentScrambleStep = 0; isScrambling = true; mistakeStack = [];
-        twistyElement.alg = ""; twistyElement.removeAttribute('facelets');
-        renderScrambleUI(); isReady = false; isSolving = false; clearInterval(timerInterval); timerDisplay.textContent = "0.00";
+        initAudio();
+        scrambleSequence = generateScramble(); 
+        currentScrambleStep = 0; 
+        mistakeStack = [];
+        appState = 'SCRAMBLING';
+        
+        twistyElement.alg = ""; // 仮想キューブを完成状態にリセット
+        
+        cancelAnimationFrame(timerAnimationId); 
+        clearInterval(inspectInterval);
+        
+        timerDisplay.textContent = "0.00"; 
+        timerDisplay.style.color = "#fff"; 
+        timerSubtext.textContent = "";
+        penaltyGroup.style.visibility = "hidden";
+        
+        renderScrambleUI();
     });
 
-    resetBtn.addEventListener('click', () => { location.reload(); });
+    resetBtn.addEventListener('click', () => {
+        appState = 'IDLE'; 
+        cancelAnimationFrame(timerAnimationId); 
+        clearInterval(inspectInterval);
+        
+        timerDisplay.textContent = "0.00"; 
+        timerDisplay.style.color = "#fff"; 
+        timerSubtext.textContent = "";
+        
+        twistyElement.alg = ""; 
+        scrambleDisplay.textContent = 'Push "Generate Scramble"';
+    });
 
+    clearSessionBtn.addEventListener('click', () => {
+        if (confirm("タイム履歴をすべて削除しますか？")) { 
+            solveTimes = []; 
+            updateStats(); 
+            penaltyGroup.style.visibility = "hidden"; 
+        }
+    });
+
+    function applyPenalty(pen) {
+        if (solveTimes.length === 0 || appState !== 'IDLE') return;
+        solveTimes[solveTimes.length - 1].penalty = pen;
+        timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);
+        updateStats();
+    }
+    btnOk.addEventListener('click', () => applyPenalty(''));
+    btnPlus2.addEventListener('click', () => applyPenalty('+2'));
+    btnDnf.addEventListener('click', () => applyPenalty('DNF'));
+
+    // --- Bluetooth ---
     connectBtn.addEventListener('click', async () => {
+        initAudio();
         try {
             cubeConnection = await connectGanCube();
-            statusBadge.textContent = "Connected"; statusBadge.className = "status-badge connected"; connectBtn.disabled = true; syncBtn.disabled = false;
-            cubeConnection.events$.subscribe((event) => {
-                if (event.type === "MOVE") {
+            statusBadge.textContent = "Connected"; 
+            statusBadge.className = "status-badge connected";
+            connectBtn.disabled = true;
+            
+            cubeConnection.events$.subscribe((ev) => {
+                if (ev.type === "MOVE") {
                     const now = Date.now();
-                    if (!isScrambling && !isSolving && !isReady) {
-                        if (((event.move==="U'"&&lastManualMove==="U")||(event.move==="U"&&lastManualMove==="U'")) && (now-lastManualMoveTime<=1000)) { scrambleBtn.click(); return; }
-                        lastManualMove = event.move; lastManualMoveTime = now;
+                    
+                    if (appState === 'IDLE') {
+                        if (((ev.move==="U'"&&lastManualMove==="U")||(ev.move==="U"&&lastManualMove==="U'")) && (now-lastManualMoveTime<=1000)) { 
+                            scrambleBtn.click(); 
+                            lastManualMove = ""; 
+                            return; 
+                        }
+                        lastManualMove = ev.move; 
+                        lastManualMoveTime = now;
                     }
-                    lastMoveTime = now;
-                    if (isScrambling) {
-                        if (mistakeStack.length > 0) { if (event.move === mistakeStack[mistakeStack.length-1]) mistakeStack.pop(); else mistakeStack.push(getInverse(event.move)); renderScrambleUI(); }
-                        else if (event.move === scrambleSequence[currentScrambleStep]) {
+
+                    if (appState === 'SCRAMBLING') {
+                        // 【修正箇所】 何よりも先に、まず3Dビューとログに現在の手を確実に反映させる！
+                        moveLog.textContent = ev.move;
+                        twistyElement.experimentalAddMove(ev.move);
+
+                        // その後でスクランブルの進行判定を行う
+                        if (mistakeStack.length > 0) {
+                            if (ev.move === getInverse(mistakeStack[mistakeStack.length-1])) mistakeStack.pop(); 
+                            else mistakeStack.push(ev.move);
+                        } else if (ev.move === scrambleSequence[currentScrambleStep]) {
                             currentScrambleStep++;
-                            if (currentScrambleStep >= scrambleSequence.length) { isScrambling = false; isReady = true; scrambleDisplay.innerHTML = "<span style='color:#f39c12;'>スクランブル完了！回すとスタート</span>"; timerDisplay.style.color = "#f39c12"; } else renderScrambleUI();
-                        } else { mistakeStack.push(getInverse(event.move)); renderScrambleUI(); }
+                            
+                            // スクランブル完了
+                            if (currentScrambleStep >= scrambleSequence.length) {
+                                appState = 'INSPECTION';
+                                inspectStartTime = Date.now();
+                                inspectWarn8 = false; 
+                                inspectWarn12 = false;
+                                
+                                scrambleDisplay.innerHTML = "<span style='color:#f39c12;'>インスペクション中...</span>";
+                                timerDisplay.textContent = "15"; 
+                                timerDisplay.style.color = "#ffffff";
+                                timerSubtext.textContent = "キューブを動かすとタイマー開始";
+                                
+                                clearInterval(inspectInterval);
+                                inspectInterval = setInterval(() => {
+                                    const elapsed = (Date.now() - inspectStartTime) / 1000;
+                                    let remain = Math.ceil(15 - elapsed);
+                                    
+                                    if (elapsed >= 8 && !inspectWarn8) { inspectWarn8 = true; timerDisplay.style.color = "#f39c12"; playBeep(440, 'square'); }
+                                    if (elapsed >= 12 && !inspectWarn12) { inspectWarn12 = true; timerDisplay.style.color = "#e74c3c"; playBeep(880, 'square'); }
+                                    
+                                    if (elapsed <= 15) { timerDisplay.textContent = remain.toString(); } 
+                                    else if (elapsed <= 17) { timerDisplay.textContent = "+2"; } 
+                                    else { timerDisplay.textContent = "DNF"; }
+                                }, 100); 
+                                
+                                return; // 処理を抜けるが、上の段階で3Dビューへの描画指示はすでに終わっているため、最後の手順も確実に反映される
+                            }
+                        } else {
+                            mistakeStack.push(ev.move);
+                        }
+                        
+                        // UI（文字）の更新
+                        renderScrambleUI();
+                        return;
                     }
-                    if (isReady && !isSolving && !isScrambling) { isSolving = true; isReady = false; startTime = now; timerInterval = setInterval(()=>timerDisplay.textContent = formatTime(Date.now() - startTime), 10); }
-                    moveLog.textContent = event.move; twistyElement.experimentalAddMove(event.move);
-                } else if (event.type === "FACELETS") {
-                    if (isSolving && checkIsSolved(event.facelets)) { clearInterval(timerInterval); isSolving = false; timerDisplay.textContent = formatTime(lastMoveTime - startTime); timerDisplay.style.color = "#0fdb92"; solveTimes.push(lastMoveTime - startTime); updateAo5(); }
-                    try { twistyElement.facelets = event.facelets; } catch(e){}
+
+                    if (appState === 'INSPECTION') {
+                        clearInterval(inspectInterval);
+                        const elapsed = (now - inspectStartTime) / 1000;
+                        currentSolvePenalty = (elapsed > 17) ? 'DNF' : (elapsed > 15) ? '+2' : '';
+                        
+                        appState = 'SOLVING';
+                        startTime = now; 
+                        
+                        startRealtimeTimer();
+                    }
+
+                    // ソルブ中はmoveLogのDOM更新も停止（負荷軽減）
+                    if (appState !== 'SOLVING') {
+                        moveLog.textContent = ev.move; 
+                    }
+                    
+                    // 常にMOVE情報だけで描画させる
+                    twistyElement.experimentalAddMove(ev.move);
+
+                } else if (ev.type === "FACELETS") {
+                    // FACELETSは裏側の完成判定にのみ使用
+                    if (appState === 'SOLVING') {
+                        const cleanStr = ev.facelets.trim().toUpperCase().replace(/\s/g, '');
+                        const solved = checkIsSolved(cleanStr);
+                        
+                        if (solved) {
+                            appState = 'IDLE'; 
+                            
+                            const finalMs = Date.now() - startTime;
+                            solveTimes.push({ timeMs: finalMs, penalty: currentSolvePenalty, date: Date.now() });
+                            
+                            timerDisplay.style.color = currentSolvePenalty === 'DNF' ? "#e74c3c" : "#0fdb92";
+                            timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);
+                            timerSubtext.textContent = "Completed!";
+                            scrambleDisplay.innerHTML = "Push \"Generate Scramble\" or [ U U' ]";
+                            penaltyGroup.style.visibility = "visible";
+                            
+                            updateStats();
+                            playBeep(523, 'sine', 0.1); 
+                            setTimeout(() => playBeep(659, 'sine', 0.1), 100); 
+                            setTimeout(() => playBeep(783, 'sine', 0.3), 200);
+                        }
+                    }
                 }
             });
-        } catch(e) { alert(e); }
+        } catch (e) { 
+            alert("Connection Error: " + e.message); 
+        }
     });
 </script>
 </body>
