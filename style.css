@@ -1,0 +1,341 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: #1a1a2e;
+    color: #ffffff;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 10px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+header {
+    padding: 10px;
+    text-align: center;
+    width: 100%;
+    max-width: 500px;
+    background: #16213e;
+    border-radius: 12px;
+    margin-bottom: 10px;
+}
+
+.app-title {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.main-layout {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 500px;
+    gap: 10px;
+}
+
+.visualizer-area {
+    width: 100%;
+    height: 260px;
+    background: radial-gradient(circle, #243447 0%, #1a1a2e 100%);
+    border-radius: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+}
+
+twisty-player {
+    width: 100%;
+    height: 100%;
+}
+
+.info-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.card {
+    background: #0f3460;
+    padding: 12px;
+    border-radius: 12px;
+}
+
+.split-card {
+    display: flex;
+    gap: 10px;
+}
+
+.panel {
+    flex: 1;
+}
+
+h2 {
+    font-size: 0.9rem;
+    margin-top: 0;
+    color: #48abe0;
+    margin-bottom: 8px;
+}
+
+#scrambleDisplay {
+    font-size: 0.95rem;
+    min-height: 2.5rem;
+    line-height: 1.4;
+    background: #16213e;
+    padding: 8px;
+    border-radius: 8px;
+    text-align: center;
+    word-break: break-all;
+}
+
+.timer-container {
+    padding: 10px 0;
+    border-radius: 8px;
+}
+
+#timerDisplay {
+    font-size: 4rem;
+    font-family: "Courier New", Courier, monospace;
+    text-align: center;
+    margin: 0;
+    font-weight: bold;
+    transition: color 0.2s;
+}
+
+#timerSubtext {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #f39c12;
+    min-height: 1rem;
+    margin-top: -5px;
+}
+
+.penalty-group {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 10px;
+    visibility: hidden;
+}
+
+.pen-btn {
+    padding: 6px 15px;
+    border-radius: 20px;
+    border: none;
+    font-weight: bold;
+    background: #2c3e50;
+    color: white;
+    cursor: pointer;
+}
+
+.pen-btn.active {
+    background: #e74c3c;
+    box-shadow: 0 0 8px rgba(231, 76, 60, 0.6);
+}
+
+.pen-btn.ok-active {
+    background: #27ae60;
+    box-shadow: 0 0 8px rgba(39, 174, 96, 0.6);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 5px;
+    text-align: center;
+    font-size: 0.85rem;
+    margin-top: 10px;
+    background: #16213e;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.stat-box span {
+    display: block;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #48abe0;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    color: #bdc3c7;
+}
+
+.scramble-step {
+    display: inline-block;
+    margin: 0 3px;
+    padding: 2px 5px;
+    border-radius: 4px;
+}
+
+.scramble-completed {
+    color: #555;
+    text-decoration: line-through;
+}
+
+.scramble-current {
+    background-color: #f39c12;
+    color: #fff;
+    font-weight: bold;
+    transform: scale(1.1);
+}
+
+.scramble-correction {
+    background-color: #e74c3c;
+    color: #fff;
+    font-weight: bold;
+    font-size: 1.2rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.scramble-correction-queue {
+    color: #e74c3c;
+    opacity: 0.6;
+    font-size: 0.85rem;
+}
+
+.assist-header {
+    color: #0fdb92;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.status-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    background: #e94560;
+}
+
+.connected {
+    background: #0fdb92;
+}
+
+.battery-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 0.78rem;
+}
+
+.battery-value {
+    min-width: 42px;
+    text-align: center;
+    font-family: "Courier New", Courier, monospace;
+    font-weight: bold;
+    color: #f7d138;
+    background: #16213e;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    color: #ffffff;
+    font-size: 0.78rem;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 24px;
+    flex: 0 0 auto;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background: #2c3e50;
+    transition: 0.2s;
+    border-radius: 999px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background: white;
+    transition: 0.2s;
+    border-radius: 50%;
+}
+
+.switch input:checked + .slider {
+    background: #0fdb92;
+}
+
+.switch input:checked + .slider:before {
+    transform: translateX(22px);
+}
+
+button.main-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #48abe0;
+    color: white;
+    font-weight: bold;
+    font-size: 1rem;
+    margin-top: 5px;
+    cursor: pointer;
+}
+
+.btn-compact {
+    padding: 8px;
+}
+
+.btn-scramble {
+    background: #9b59b6;
+}
+
+.btn-reset {
+    background: #f39c12;
+    margin-top: 0;
+}
+
+.btn-assist {
+    background: #16a085;
+}
+
+.btn-clear {
+    background: #c0392b;
+}
+
+button:disabled {
+    opacity: 0.5;
+    background: #555;
+}
+
+#moveLog {
+    font-family: monospace;
+    background: #16213e;
+    padding: 6px;
+    height: 50px;
+    overflow-y: auto;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #f7d138;
+}

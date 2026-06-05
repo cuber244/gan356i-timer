@@ -4,60 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GAN Cube Smart Timer Pro</title>
+    <link rel="stylesheet" href="style.css">
     <script type="module" src="https://cdn.cubing.net/js/cubing/twisty"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #1a1a2e; color: #ffffff; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 10px; box-sizing: border-box; overflow-x: hidden; }
-        header { padding: 10px; text-align: center; width: 100%; max-width: 500px; background: #16213e; border-radius: 12px; margin-bottom: 10px; }
-        .main-layout { display: flex; flex-direction: column; width: 100%; max-width: 500px; gap: 10px; }
-        .visualizer-area { width: 100%; height: 260px; background: radial-gradient(circle, #243447 0%, #1a1a2e 100%); border-radius: 20px; display: flex; justify-content: center; align-items: center; position: relative; }
-        twisty-player { width: 100%; height: 100%; }
-        .info-area { width: 100%; display: flex; flex-direction: column; gap: 10px; }
-        .card { background: #0f3460; padding: 12px; border-radius: 12px; }
-        h2 { font-size: 0.9rem; margin-top: 0; color: #48abe0; margin-bottom: 8px; }
-        
-        #scrambleDisplay { font-size: 0.95rem; min-height: 2.5rem; line-height: 1.4; background: #16213e; padding: 8px; border-radius: 8px; text-align: center; word-break: break-all; }
-        
-        .timer-container { padding: 10px 0; border-radius: 8px; }
-        #timerDisplay { font-size: 4rem; font-family: 'Courier New', Courier, monospace; text-align: center; margin: 0; font-weight: bold; transition: color 0.2s; }
-        #timerSubtext { text-align: center; font-size: 0.8rem; color: #f39c12; min-height: 1rem; margin-top: -5px; }
-
-        .penalty-group { display: flex; justify-content: center; gap: 10px; margin-top: 10px; visibility: hidden; }
-        .pen-btn { padding: 6px 15px; border-radius: 20px; border: none; font-weight: bold; background: #2c3e50; color: white; cursor: pointer; }
-        .pen-btn.active { background: #e74c3c; box-shadow: 0 0 8px rgba(231,76,60,0.6); }
-        .pen-btn.ok-active { background: #27ae60; box-shadow: 0 0 8px rgba(39,174,96,0.6); }
-
-        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; text-align: center; font-size: 0.85rem; margin-top: 10px; background: #16213e; padding: 10px; border-radius: 8px; }
-        .stat-box span { display: block; font-family: 'Courier New', Courier, monospace; font-weight: bold; font-size: 1.1rem; color: #48abe0; }
-        .stat-label { font-size: 0.7rem; color: #bdc3c7; }
-
-        .scramble-step { display: inline-block; margin: 0 3px; padding: 2px 5px; border-radius: 4px; }
-        .scramble-completed { color: #555; text-decoration: line-through; }
-        .scramble-current { background-color: #f39c12; color: #fff; font-weight: bold; transform: scale(1.1); }
-        .scramble-correction { background-color: #e74c3c; color: #fff; font-weight: bold; font-size: 1.2rem; padding: 2px 6px; border-radius: 4px; }
-        .scramble-correction-queue { color: #e74c3c; opacity: 0.6; font-size: 0.85rem; }
-
-        .status-badge { padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; background: #e94560; }
-        .connected { background: #0fdb92; }
-
-        button.main-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; background: #48abe0; color: white; font-weight: bold; font-size: 1rem; margin-top: 5px; cursor: pointer; }
-        button:disabled { opacity: 0.5; background: #555; }
-        #moveLog { font-family: monospace; background: #16213e; padding: 6px; height: 50px; overflow-y: auto; border-radius: 4px; font-size: 0.9rem; color: #f7d138; }
-    </style>
 </head>
 <body>
 
-<header><h1 style="margin: 0; font-size: 1.2rem;">GAN Cube Smart Timer Pro</h1></header>
+<header><h1 class="app-title">GAN Cube Smart Timer Pro</h1></header>
 
 <div class="main-layout">
     <div class="visualizer-area">
-        <twisty-player id="cubeVisualizer" visualization="3D" control-panel="none" back-view="none" background="none"></twisty-player>
+        <twisty-player id="cubeVisualizer" visualization="3D" control-panel="none" back-view="none" background="none" tempo-scale="2"></twisty-player>
     </div>
 
     <div class="info-area">
         <div class="card">
             <h2>⏱️ Solve Timer</h2>
             <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
-            
+
             <div class="timer-container" id="timerArea">
                 <div id="timerDisplay">0.00</div>
                 <div id="timerSubtext"></div>
@@ -78,386 +41,37 @@
                 <div class="stat-box"><div class="stat-label">Solves</div><span id="statCount">0</span></div>
             </div>
 
-            <button class="main-btn" id="scrambleBtn" style="background: #9b59b6;">🎲 スクランブル生成</button>
+            <button class="main-btn btn-scramble" id="scrambleBtn">🎲 スクランブル生成</button>
         </div>
 
-        <div class="card" style="display: flex; gap: 10px;">
-            <div style="flex: 1;">
+        <div class="card split-card">
+            <div class="panel">
                 <h2>Connection</h2>
                 <span id="statusBadge" class="status-badge">Disconnected</span>
-                <button class="main-btn" id="connectBtn" style="padding: 8px;">Connect</button>
+                <div class="battery-row">
+                    <span>Battery</span>
+                    <span id="batteryLevel" class="battery-value">--</span>
+                </div>
+                <button class="main-btn btn-compact" id="connectBtn">Connect</button>
             </div>
-            <div style="flex: 1;">
+            <div class="panel">
                 <h2>Tools</h2>
-                <button class="main-btn" id="resetBtn" style="background:#f39c12; padding: 8px; margin-top: 0;">仮想キューブをリセット</button>
-                <button class="main-btn" id="clearSessionBtn" style="background:#c0392b; padding: 8px;">履歴クリア</button>
+                <div class="setting-row">
+                    <span>U U' 自動生成</span>
+                    <label class="switch" for="uuShortcutToggle">
+                        <input type="checkbox" id="uuShortcutToggle">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <button class="main-btn btn-compact btn-assist" id="assistBtn">アシスト</button>
+                <button class="main-btn btn-compact btn-reset" id="resetBtn">仮想キューブをリセット</button>
+                <button class="main-btn btn-compact btn-clear" id="clearSessionBtn">履歴クリア</button>
             </div>
         </div>
         <div id="moveLog">Waiting for moves...</div>
     </div>
 </div>
 
-<script type="module">
-    window.onerror = function(msg, url, line) { alert("Error: " + msg + "\nLine: " + line); return false; };
-
-    import { connectGanCube } from 'https://esm.sh/gan-web-bluetooth';
-    import Cube from 'https://cdn.skypack.dev/cubejs';
-    Cube.initSolver();
-    let solverInitialized = true;
-
-    // --- Audio System ---
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    let audioCtx = null;
-
-    function initAudio() {
-        if (!audioCtx) audioCtx = new AudioContext();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-    }
-
-    function playBeep(freq, type = 'sine', dur = 0.2) {
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + dur);
-    }
-
-    // --- DOM Elements ---
-    const getEl = id => document.getElementById(id);
-    const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'), 
-          resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'), 
-          btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf');
-    const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'), 
-          scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'), 
-          statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'), 
-          penaltyGroup = getEl('penaltyGroup');
-    
-    // --- State Variables ---
-    let cubeConnection = null;
-    let appState = 'IDLE'; 
-    let solveTimes = JSON.parse(localStorage.getItem('ganTimerSession')) || [];
-    
-    let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
-    let lastManualMove = "", lastManualMoveTime = 0;
-    
-    let inspectInterval = null;
-    let timerAnimationId = null; 
-    let startTime = 0, inspectStartTime = 0;
-    let inspectWarn8 = false, inspectWarn12 = false;
-    let currentSolvePenalty = ""; 
-
-    // --- Format & Stats Logic ---
-    function formatTime(ms) { return (ms / 1000).toFixed(2); }
-    function formatDisplay(solveObj) {
-        if (solveObj.penalty === 'DNF') return 'DNF';
-        if (solveObj.penalty === '+2') return formatTime(solveObj.timeMs + 2000) + '+';
-        return formatTime(solveObj.timeMs);
-    }
-    function getActualMs(solveObj) {
-        if (solveObj.penalty === 'DNF') return Infinity;
-        if (solveObj.penalty === '+2') return solveObj.timeMs + 2000;
-        return solveObj.timeMs;
-    }
-
-    function updateStats() {
-        localStorage.setItem('ganTimerSession', JSON.stringify(solveTimes));
-        getEl('statCount').textContent = solveTimes.length;
-        
-        if (solveTimes.length === 0) {
-            ['statPb','statAo5','statAo12','statBest','statWorst'].forEach(id => getEl(id).textContent = "--");
-            return;
-        }
-
-        const validMs = solveTimes.map(getActualMs);
-        const nonDnf = validMs.filter(ms => ms !== Infinity);
-        
-        getEl('statPb').textContent = nonDnf.length > 0 ? formatTime(Math.min(...nonDnf)) : "--";
-        getEl('statBest').textContent = nonDnf.length > 0 ? formatTime(Math.min(...nonDnf)) : "--";
-        getEl('statWorst').textContent = validMs.includes(Infinity) ? "DNF" : formatTime(Math.max(...validMs));
-
-        const calcAvg = (n) => {
-            if (solveTimes.length < n) return "--";
-            let slice = validMs.slice(-n);
-            if (slice.filter(m => m === Infinity).length > 1) return "DNF";
-            slice.sort((a,b) => a - b);
-            slice.pop(); slice.shift();
-            return formatTime(slice.reduce((a,b) => a + b, 0) / slice.length);
-        };
-        
-        getEl('statAo5').textContent = calcAvg(5);
-        getEl('statAo12').textContent = calcAvg(12);
-        
-        const last = solveTimes[solveTimes.length - 1];
-        btnOk.className = 'pen-btn ' + (last.penalty === '' ? 'ok-active' : '');
-        btnPlus2.className = 'pen-btn ' + (last.penalty === '+2' ? 'active' : '');
-        btnDnf.className = 'pen-btn ' + (last.penalty === 'DNF' ? 'active' : '');
-    }
-    updateStats();
-
-    // --- Game Logic ---
-    function getReverseTurn(m) { return m.endsWith("'") ? m[0] : (m.endsWith("2") ? m : m + "'"); }
-    function reverseAlgSequence(alg) {
-        if (!alg || typeof alg !== 'string') return "";
-        return alg.trim().split(/\s+/).reverse().map(m => getReverseTurn(m)).join(" ");
-    }
-
-    // ★ WCA Random State Scramble の生成
-    function generateScramble() {
-        if (typeof Cube !== 'undefined' && solverInitialized) {
-            try {
-                if (typeof Cube.scramble === 'function') {
-                    return Cube.scramble().split(' ');
-                } else {
-                    // Random Stateの逆手順(スクランブル)を取得
-                    const solveAlg = Cube.random().solve();
-                    return reverseAlgSequence(solveAlg).split(' ');
-                }
-            } catch(e) { console.warn("Random state scramble failed", e); }
-        }
-        
-        // フォールバック（180度回転含むランダムムーブ）
-        const faces = ['U','D','R','L','F','B'], mods = ['',"'", '2'];
-        let scr = [], last = '', sec = '';
-        for (let i = 0; i < 21; i++) {
-            let f; 
-            do { f = faces[Math.floor(Math.random() * 6)]; } 
-            while (f === last || (f === sec && ((f==='U'&&last==='D')||(f==='D'&&last==='U')||(f==='R'&&last==='L')||(f==='L'&&last==='R')||(f==='F'&&last==='B')||(f==='B'&&last==='F'))));
-            scr.push(f + mods[Math.floor(Math.random() * 3)]); 
-            sec = last; last = f;
-        }
-        return scr;
-    }
-
-    function renderScrambleUI() {
-        if (appState !== 'SCRAMBLING') return;
-        
-        let htmlStr = "";
-        if (mistakeStack.length > 0) {
-            htmlStr += "<div style='color:#e74c3c; margin-bottom:5px;'>❌ 巻き戻し手順:</div>";
-            for (let i = mistakeStack.length - 1; i >= 0; i--) { 
-                const step = getReverseTurn(mistakeStack[i]);
-                const className = (i === mistakeStack.length - 1) ? 'scramble-correction' : 'scramble-correction-queue';
-                htmlStr += `<span class="scramble-step ${className}">${step}</span>`;
-            }
-        } else {
-            scrambleSequence.forEach((m, i) => { 
-                let className = '';
-                if (i < currentScrambleStep) className = 'scramble-completed';
-                else if (i === currentScrambleStep) className = 'scramble-current';
-                htmlStr += `<span class="scramble-step ${className}">${m}</span>`;
-            });
-        }
-        scrambleDisplay.innerHTML = htmlStr;
-    }
-
-    function startRealtimeTimer() {
-        cancelAnimationFrame(timerAnimationId);
-        function update() {
-            if (appState === 'SOLVING') {
-                timerDisplay.textContent = formatTime(Date.now() - startTime);
-                timerAnimationId = requestAnimationFrame(update);
-            }
-        }
-        timerAnimationId = requestAnimationFrame(update);
-    }
-
-    function checkIsSolved(cleanStr) {
-        if (cleanStr.length !== 54) return false;
-        if (cleanStr === "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB") return true;
-        
-        for (let i = 0; i < 6; i++) { 
-            const baseColor = cleanStr[i * 9];
-            for (let j = 1; j < 9; j++) { 
-                if (cleanStr[i * 9 + j] !== baseColor) return false;
-            }
-        }
-        return true;
-    }
-
-    // --- Actions ---
-    scrambleBtn.addEventListener('click', () => {
-        initAudio();
-        scrambleSequence = generateScramble(); 
-        currentScrambleStep = 0; 
-        mistakeStack = [];
-        appState = 'SCRAMBLING';
-        
-        twistyElement.alg = ""; // 仮想キューブを完成状態にリセット
-        
-        cancelAnimationFrame(timerAnimationId); 
-        clearInterval(inspectInterval);
-        
-        timerDisplay.textContent = "0.00"; 
-        timerDisplay.style.color = "#fff"; 
-        timerSubtext.textContent = "";
-        penaltyGroup.style.visibility = "hidden";
-        
-        renderScrambleUI();
-    });
-
-    resetBtn.addEventListener('click', () => {
-        appState = 'IDLE'; 
-        cancelAnimationFrame(timerAnimationId); 
-        clearInterval(inspectInterval);
-        
-        timerDisplay.textContent = "0.00"; 
-        timerDisplay.style.color = "#fff"; 
-        timerSubtext.textContent = "";
-        
-        twistyElement.alg = ""; 
-        scrambleDisplay.textContent = 'Push "Generate Scramble"';
-    });
-
-    clearSessionBtn.addEventListener('click', () => {
-        if (confirm("タイム履歴をすべて削除しますか？")) { 
-            solveTimes = []; 
-            updateStats(); 
-            penaltyGroup.style.visibility = "hidden"; 
-        }
-    });
-
-    function applyPenalty(pen) {
-        if (solveTimes.length === 0 || appState !== 'IDLE') return;
-        solveTimes[solveTimes.length - 1].penalty = pen;
-        timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);
-        updateStats();
-    }
-    btnOk.addEventListener('click', () => applyPenalty(''));
-    btnPlus2.addEventListener('click', () => applyPenalty('+2'));
-    btnDnf.addEventListener('click', () => applyPenalty('DNF'));
-
-    // --- Bluetooth ---
-    connectBtn.addEventListener('click', async () => {
-        initAudio();
-        try {
-            cubeConnection = await connectGanCube();
-            statusBadge.textContent = "Connected"; 
-            statusBadge.className = "status-badge connected";
-            connectBtn.disabled = true;
-            
-            cubeConnection.events$.subscribe((ev) => {
-                if (ev.type === "MOVE") {
-                    const now = Date.now();
-                    
-                    if (appState === 'IDLE') {
-                        if (((ev.move==="U'"&&lastManualMove==="U")||(ev.move==="U"&&lastManualMove==="U'")) && (now-lastManualMoveTime<=1000)) { 
-                            scrambleBtn.click(); 
-                            lastManualMove = ""; 
-                            return; 
-                        }
-                        lastManualMove = ev.move; 
-                        lastManualMoveTime = now;
-                    }
-
-                    if (appState === 'SCRAMBLING') {
-                        moveLog.textContent = ev.move;
-                        twistyElement.experimentalAddMove(ev.move);
-
-                        let expected = scrambleSequence[currentScrambleStep];
-
-                        // ★ 180度回転 (R2等) の「半回転アシスト」ロジック
-                        // ミスがなく、期待される手順が '2' を含み、回した面が合っている場合
-                        if (expected && expected.includes('2') && mistakeStack.length === 0 && ev.move[0] === expected[0]) {
-                            // R2期待時にRを回したら、残りの必要手順を「R」に書き換える（R'ならR'）
-                            scrambleSequence[currentScrambleStep] = ev.move;
-                            renderScrambleUI();
-                            return; 
-                        }
-
-                        // 通常のミストラッキング・進行ロジック
-                        if (mistakeStack.length > 0) {
-                            if (ev.move === getReverseTurn(mistakeStack[mistakeStack.length-1])) mistakeStack.pop(); 
-                            else mistakeStack.push(ev.move);
-                        } else if (ev.move === expected) {
-                            currentScrambleStep++;
-                            
-                            // スクランブル完了
-                            if (currentScrambleStep >= scrambleSequence.length) {
-                                appState = 'INSPECTION';
-                                inspectStartTime = Date.now();
-                                inspectWarn8 = false; 
-                                inspectWarn12 = false;
-                                
-                                scrambleDisplay.innerHTML = "<span style='color:#f39c12;'>インスペクション中...</span>";
-                                timerDisplay.textContent = "15"; 
-                                timerDisplay.style.color = "#ffffff";
-                                timerSubtext.textContent = "キューブを動かすとタイマー開始";
-                                
-                                clearInterval(inspectInterval);
-                                inspectInterval = setInterval(() => {
-                                    const elapsed = (Date.now() - inspectStartTime) / 1000;
-                                    let remain = Math.ceil(15 - elapsed);
-                                    
-                                    if (elapsed >= 8 && !inspectWarn8) { inspectWarn8 = true; timerDisplay.style.color = "#f39c12"; playBeep(440, 'square'); }
-                                    if (elapsed >= 12 && !inspectWarn12) { inspectWarn12 = true; timerDisplay.style.color = "#e74c3c"; playBeep(880, 'square'); }
-                                    
-                                    if (elapsed <= 15) { timerDisplay.textContent = remain.toString(); } 
-                                    else if (elapsed <= 17) { timerDisplay.textContent = "+2"; } 
-                                    else { timerDisplay.textContent = "DNF"; }
-                                }, 100); 
-                                
-                                return;
-                            }
-                        } else {
-                            mistakeStack.push(ev.move);
-                        }
-                        
-                        renderScrambleUI();
-                        return;
-                    }
-
-                    if (appState === 'INSPECTION') {
-                        clearInterval(inspectInterval);
-                        const elapsed = (now - inspectStartTime) / 1000;
-                        currentSolvePenalty = (elapsed > 17) ? 'DNF' : (elapsed > 15) ? '+2' : '';
-                        
-                        appState = 'SOLVING';
-                        startTime = now; 
-                        
-                        startRealtimeTimer();
-                    }
-
-                    if (appState !== 'SOLVING') {
-                        moveLog.textContent = ev.move; 
-                    }
-                    
-                    twistyElement.experimentalAddMove(ev.move);
-
-                } else if (ev.type === "FACELETS") {
-                    if (appState === 'SOLVING') {
-                        const cleanStr = ev.facelets.trim().toUpperCase().replace(/\s/g, '');
-                        const solved = checkIsSolved(cleanStr);
-                        
-                        if (solved) {
-                            appState = 'IDLE'; 
-                            
-                            const finalMs = Date.now() - startTime;
-                            solveTimes.push({ timeMs: finalMs, penalty: currentSolvePenalty, date: Date.now() });
-                            
-                            timerDisplay.style.color = currentSolvePenalty === 'DNF' ? "#e74c3c" : "#0fdb92";
-                            timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);
-                            timerSubtext.textContent = "Completed!";
-                            scrambleDisplay.innerHTML = "Push \"Generate Scramble\" or [ U U' ]";
-                            penaltyGroup.style.visibility = "visible";
-                            
-                            updateStats();
-                            playBeep(523, 'sine', 0.1); 
-                            setTimeout(() => playBeep(659, 'sine', 0.1), 100); 
-                            setTimeout(() => playBeep(783, 'sine', 0.3), 200);
-                        }
-                    }
-                }
-            });
-        } catch (e) { 
-            alert("Connection Error: " + e.message); 
-        }
-    });
-</script>
+<script src="app.js"></script>
 </body>
 </html>
