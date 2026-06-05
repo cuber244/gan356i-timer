@@ -52,6 +52,10 @@
                     <span>Battery</span>
                     <span id="batteryLevel" class="battery-value">--</span>
                 </div>
+                <label class="mac-row">
+                    <span>MAC</span>
+                    <input id="cubeMacInput" class="mac-input" type="text" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" spellcheck="false">
+                </label>
                 <button class="main-btn btn-compact" id="connectBtn">Connect</button>
             </div>
             <div class="panel">
@@ -64,6 +68,8 @@
                     </label>
                 </div>
                 <button class="main-btn btn-compact btn-assist" id="assistBtn">アシスト</button>
+                <button class="main-btn btn-compact btn-cfop-assist" id="cfopAssistBtn">CFOPアシスト</button>
+                <button class="main-btn btn-compact btn-state-reset" id="resetCubeStateBtn">状態を完成に同期</button>
                 <button class="main-btn btn-compact btn-reset" id="resetBtn">仮想キューブをリセット</button>
                 <button class="main-btn btn-compact btn-clear" id="clearSessionBtn">履歴クリア</button>
             </div>

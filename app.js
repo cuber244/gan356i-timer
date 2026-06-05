@@ -8,8 +8,14 @@ let Cube = null;
 let solverInitialized = false;
 const STORAGE_SESSION = 'ganTimerSession';
 const STORAGE_UU_SHORTCUT = 'ganTimerUuShortcutEnabled';
+const STORAGE_CUBE_MAC = 'ganTimerCubeMacAddress';
 const IDLE_SCRAMBLE_TEXT = 'Push "Generate Scramble" or [ U U\' ]';
 const SOLVED_FACELETS = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+const NORMAL_TEMPO_SCALE = 2;
+const ASSIST_PREVIEW_TEMPO_SCALE = 1;
+const ASSIST_PREVIEW_MOVE_MS = 950;
+const ASSIST_PREVIEW_PAUSE_AFTER_MOVE_MS = 220;
+const ASSIST_PREVIEW_PAUSE_AFTER_RESET_MS = 260;
 
 const librariesReady = loadLibraries();
 
@@ -52,13 +58,14 @@ function playBeep(freq, type = 'sine', dur = 0.2) {
 // --- DOM Elements ---
 const getEl = id => document.getElementById(id);
 const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
-      assistBtn = getEl('assistBtn'), resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'),
+      assistBtn = getEl('assistBtn'), cfopAssistBtn = getEl('cfopAssistBtn'),
+      resetCubeStateBtn = getEl('resetCubeStateBtn'), resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'),
       btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf'),
       uuShortcutToggle = getEl('uuShortcutToggle');
 const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'),
       scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
-      penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel');
+      penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput');
 const stats = {
     pb: getEl('statPb'),
     ao5: getEl('statAo5'),
@@ -77,19 +84,40 @@ let uuShortcutEnabled = localStorage.getItem(STORAGE_UU_SHORTCUT) !== 'false';
 let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
 let assistSequence = [], currentAssistStep = 0, assistMistakeStack = [];
 let assistFaceletsRequested = false;
+let assistMode = 'normal';
+let cfopFaceletsRequested = false;
+let cfopPhases = [];
 let lastManualMove = "", lastManualMoveTime = 0;
 
 let inspectInterval = null;
 let timerAnimationId = null;
+let faceletsRefreshTimer = null;
 let startTime = 0, inspectStartTime = 0;
 let inspectWarn8 = false, inspectWarn12 = false;
 let currentSolvePenalty = "";
+let assistPreviewMove = null;
+let assistPreviewReverseTimer = null;
+let assistPreviewLoopTimer = null;
+let assistPreviewBaseAlg = "";
+let visualizerAlg = "";
 
 uuShortcutToggle.checked = uuShortcutEnabled;
 uuShortcutToggle.addEventListener('change', () => {
     uuShortcutEnabled = uuShortcutToggle.checked;
     localStorage.setItem(STORAGE_UU_SHORTCUT, uuShortcutEnabled ? 'true' : 'false');
     if (!uuShortcutEnabled) lastManualMove = "";
+});
+
+cubeMacInput.value = localStorage.getItem(STORAGE_CUBE_MAC) || "";
+cubeMacInput.addEventListener('input', () => {
+    const normalizedMac = normalizeMacAddress(cubeMacInput.value);
+    cubeMacInput.classList.toggle('invalid', cubeMacInput.value.trim() !== "" && !normalizedMac);
+    if (normalizedMac) {
+        cubeMacInput.value = normalizedMac;
+        localStorage.setItem(STORAGE_CUBE_MAC, normalizedMac);
+    } else if (cubeMacInput.value.trim() === "") {
+        localStorage.removeItem(STORAGE_CUBE_MAC);
+    }
 });
 
 // --- Format & Stats Logic ---
@@ -120,8 +148,101 @@ function resetTimerDisplay() {
     timerSubtext.textContent = "";
 }
 
+function hideMoveGuide() {
+    stopAssistPreview(true);
+}
+
+function updateMoveGuide(move) {
+    startAssistPreview(move);
+}
+
+function startAssistPreview(move) {
+    if (assistPreviewMove === move && assistPreviewLoopTimer) return;
+    stopAssistPreview(true);
+    if (!move) return;
+
+    assistPreviewMove = move;
+    assistPreviewBaseAlg = visualizerAlg;
+
+    const playOnce = () => {
+        if (assistPreviewMove !== move) return;
+
+        restoreAssistPreviewBase();
+        setTwistyTempo(ASSIST_PREVIEW_TEMPO_SCALE);
+        twistyElement.experimentalAddMove(move);
+
+        assistPreviewReverseTimer = setTimeout(() => {
+            setTwistyTempo(NORMAL_TEMPO_SCALE);
+            restoreAssistPreviewBase();
+        }, ASSIST_PREVIEW_MOVE_MS + ASSIST_PREVIEW_PAUSE_AFTER_MOVE_MS);
+    };
+
+    playOnce();
+    assistPreviewLoopTimer = setInterval(playOnce, ASSIST_PREVIEW_MOVE_MS + ASSIST_PREVIEW_PAUSE_AFTER_MOVE_MS + ASSIST_PREVIEW_PAUSE_AFTER_RESET_MS);
+}
+
+function stopAssistPreview(restoreVisualState = true) {
+    clearTimeout(assistPreviewReverseTimer);
+    clearInterval(assistPreviewLoopTimer);
+    assistPreviewReverseTimer = null;
+    assistPreviewLoopTimer = null;
+
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    if (restoreVisualState) restoreAssistPreviewBase();
+
+    assistPreviewMove = null;
+    assistPreviewBaseAlg = "";
+}
+
+function restoreAssistPreviewBase() {
+    twistyElement.alg = assistPreviewBaseAlg;
+}
+
+function setTwistyTempo(scale) {
+    twistyElement.tempoScale = scale;
+    twistyElement.setAttribute('tempo-scale', String(scale));
+}
+
+function resetVisualizerAlg() {
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    visualizerAlg = "";
+    twistyElement.alg = "";
+}
+
+function applyRealMoveToVisualizer(move, restorePreview = false) {
+    if (restorePreview) stopAssistPreview(true);
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    visualizerAlg = [visualizerAlg, move].filter(Boolean).join(" ");
+    twistyElement.experimentalAddMove(move);
+}
+
 function setBatteryLevel(level) {
     batteryLevel.textContent = Number.isFinite(level) ? `${level}%` : "--";
+}
+
+function normalizeMacAddress(value) {
+    const compact = value.trim().replace(/[^0-9a-f]/gi, '').toUpperCase();
+    if (compact.length !== 12) return null;
+    return compact.match(/.{2}/g).join(":");
+}
+
+async function provideCubeMacAddress(device, isFallbackCall = false) {
+    const savedMac = normalizeMacAddress(cubeMacInput.value || localStorage.getItem(STORAGE_CUBE_MAC) || "");
+    if (savedMac) return savedMac;
+    if (!isFallbackCall) return null;
+
+    const enteredMac = prompt(
+        `${device.name || "GAN Cube"} のMACアドレスを入力してください。\n` +
+        "例: AA:BB:CC:DD:EE:FF\n\n" +
+        "空欄のままキャンセルすると接続を中止します。"
+    );
+    const normalizedMac = enteredMac ? normalizeMacAddress(enteredMac) : null;
+    if (!normalizedMac) return null;
+
+    cubeMacInput.value = normalizedMac;
+    cubeMacInput.classList.remove('invalid');
+    localStorage.setItem(STORAGE_CUBE_MAC, normalizedMac);
+    return normalizedMac;
 }
 
 async function requestBatteryLevel() {
@@ -134,6 +255,24 @@ async function requestBatteryLevel() {
 
 async function requestCurrentFacelets() {
     await cubeConnection?.sendCubeCommand({ type: "REQUEST_FACELETS" });
+}
+
+async function resetCubeInternalState() {
+    await cubeConnection?.sendCubeCommand({ type: "REQUEST_RESET" });
+    await requestCurrentFacelets();
+}
+
+function showFaceletsLog(facelets) {
+    const cleanStr = cleanFacelets(facelets);
+    moveLog.textContent = `FACELETS: ${cleanStr}`;
+}
+
+function scheduleFaceletsRefresh() {
+    if (!cubeConnection || assistFaceletsRequested || cfopFaceletsRequested) return;
+    clearTimeout(faceletsRefreshTimer);
+    faceletsRefreshTimer = setTimeout(() => {
+        requestCurrentFacelets().catch(e => console.warn("Facelets refresh failed", e));
+    }, 180);
 }
 
 function updateStats() {
@@ -184,12 +323,86 @@ function splitAlg(alg) {
     return alg ? alg.trim().split(/\s+/).filter(Boolean) : [];
 }
 
+function cleanFacelets(facelets) {
+    return facelets.trim().toUpperCase().replace(/\s/g, '');
+}
+
 function solveFacelets(facelets) {
     if (!Cube || !solverInitialized) throw new Error("Solver is not loaded.");
-    const cleanStr = facelets.trim().toUpperCase().replace(/\s/g, '');
+    const cleanStr = cleanFacelets(facelets);
     if (checkIsSolved(cleanStr)) return [];
     const cube = Cube.fromString(cleanStr);
     return splitAlg(cube.solve());
+}
+
+function faceletsAfterMoves(facelets, moves) {
+    const cube = Cube.fromString(cleanFacelets(facelets));
+    if (moves.length > 0) cube.move(moves.join(" "));
+    return cube.asString();
+}
+
+function hasSolvedCross(facelets) {
+    return facelets[28] === 'D' && facelets[30] === 'D' && facelets[32] === 'D' && facelets[34] === 'D' &&
+           facelets[16] === 'R' && facelets[25] === 'F' && facelets[43] === 'L' && facelets[52] === 'B';
+}
+
+function hasSolvedF2L(facelets) {
+    const solvedRanges = [
+        [12, 17, 'R'],
+        [21, 26, 'F'],
+        [39, 44, 'L'],
+        [48, 53, 'B'],
+        [27, 35, 'D']
+    ];
+    return solvedRanges.every(([start, end, color]) => {
+        for (let i = start; i <= end; i++) {
+            if (facelets[i] !== color) return false;
+        }
+        return true;
+    });
+}
+
+function hasSolvedOLL(facelets) {
+    for (let i = 0; i <= 8; i++) {
+        if (facelets[i] !== 'U') return false;
+    }
+    return true;
+}
+
+function makeCfopPhases(facelets, sequence) {
+    const targets = [
+        { key: 'cross', label: 'Cross', test: hasSolvedCross },
+        { key: 'f2l', label: 'F2L', test: hasSolvedF2L },
+        { key: 'oll', label: 'OLL', test: hasSolvedOLL },
+        { key: 'pll', label: 'PLL', test: checkIsSolved }
+    ];
+    const phases = [];
+    let start = 0;
+
+    targets.forEach((target, targetIndex) => {
+        let end = sequence.length;
+        for (let i = start; i <= sequence.length; i++) {
+            const state = faceletsAfterMoves(facelets, sequence.slice(0, i));
+            if (target.test(state)) {
+                end = i;
+                break;
+            }
+        }
+
+        if (end === start && targetIndex < targets.length - 1) return;
+        phases.push({ ...target, start, end });
+        start = end;
+    });
+
+    if (phases.length === 0 || phases[phases.length - 1].end < sequence.length) {
+        phases.push({ key: 'pll', label: 'PLL', start, end: sequence.length });
+    }
+
+    return phases;
+}
+
+function getCurrentCfopPhase() {
+    return cfopPhases.find(phase => currentAssistStep < phase.end) || cfopPhases[cfopPhases.length - 1];
 }
 
 // WCA Random State Scramble の生成
@@ -240,9 +453,10 @@ function renderScrambleUI() {
 }
 
 function renderAssistUI() {
-    if (appState !== 'ASSISTING') return;
+    if (appState !== 'ASSISTING' && appState !== 'CFOP_ASSISTING') return;
 
     if (assistMistakeStack.length > 0) {
+        updateMoveGuide(getReverseTurn(assistMistakeStack[assistMistakeStack.length - 1]));
         const correctionSteps = assistMistakeStack.slice().reverse().map((move, i) => {
             const className = i === 0 ? 'scramble-correction' : 'scramble-correction-queue';
             return `<span class="scramble-step ${className}">${getReverseTurn(move)}</span>`;
@@ -252,6 +466,9 @@ function renderAssistUI() {
     }
 
     const remaining = assistSequence.length - currentAssistStep;
+    updateMoveGuide(assistSequence[currentAssistStep]);
+    const phase = assistMode === 'cfop' ? getCurrentCfopPhase() : null;
+    const phaseText = phase ? `<div class="cfop-phase">CFOP: ${phase.label}</div>` : "";
     const steps = assistSequence.map((move, i) => {
         let className = '';
         if (i < currentAssistStep) className = 'scramble-completed';
@@ -259,29 +476,33 @@ function renderAssistUI() {
         return `<span class="scramble-step ${className}">${move}</span>`;
     }).join("");
 
-    scrambleDisplay.innerHTML = `<div class="assist-header">アシスト中: 残り ${remaining} 手</div>${steps}`;
+    scrambleDisplay.innerHTML = `<div class="assist-header">アシスト中: 残り ${remaining} 手</div>${phaseText}${steps}`;
 }
 
-function startAssistFromFacelets(facelets) {
+function startAssistFromFacelets(facelets, mode = 'normal') {
     try {
         assistSequence = solveFacelets(facelets);
         currentAssistStep = 0;
         assistMistakeStack = [];
+        assistMode = mode;
+        cfopPhases = mode === 'cfop' ? makeCfopPhases(facelets, assistSequence) : [];
 
         if (assistSequence.length === 0) {
             appState = 'IDLE';
+            hideMoveGuide();
             scrambleDisplay.textContent = "すでに完成しています";
             timerSubtext.textContent = "";
             return;
         }
 
-        appState = 'ASSISTING';
+        appState = mode === 'cfop' ? 'CFOP_ASSISTING' : 'ASSISTING';
         stopActiveTimers();
         resetTimerDisplay();
         penaltyGroup.style.visibility = "hidden";
         renderAssistUI();
     } catch (e) {
         appState = 'IDLE';
+        hideMoveGuide();
         scrambleDisplay.textContent = "アシスト手順を計算できませんでした";
         timerSubtext.textContent = e.message;
         console.warn("Assist solve failed", e);
@@ -316,13 +537,14 @@ function checkIsSolved(cleanStr) {
 scrambleBtn.addEventListener('click', () => {
     initAudio();
     stopActiveTimers();
+    hideMoveGuide();
 
     scrambleSequence = generateScramble();
     currentScrambleStep = 0;
     mistakeStack = [];
     appState = 'SCRAMBLING';
 
-    twistyElement.alg = ""; // 仮想キューブを完成状態にリセット
+    resetVisualizerAlg(); // 仮想キューブを完成状態にリセット
     resetTimerDisplay();
     penaltyGroup.style.visibility = "hidden";
 
@@ -337,8 +559,10 @@ assistBtn.addEventListener('click', async () => {
         if (!Cube || !solverInitialized) throw new Error("Solver is not loaded.");
 
         assistFaceletsRequested = true;
+        cfopFaceletsRequested = false;
         appState = 'ASSIST_PENDING';
         stopActiveTimers();
+        hideMoveGuide();
         resetTimerDisplay();
         penaltyGroup.style.visibility = "hidden";
         scrambleDisplay.textContent = "現在のキューブ状態を取得中...";
@@ -352,15 +576,64 @@ assistBtn.addEventListener('click', async () => {
     }
 });
 
+cfopAssistBtn.addEventListener('click', async () => {
+    initAudio();
+    try {
+        await librariesReady;
+        if (!cubeConnection) throw new Error("先にConnectしてください");
+        if (!Cube || !solverInitialized) throw new Error("Solver is not loaded.");
+
+        assistFaceletsRequested = false;
+        cfopFaceletsRequested = true;
+        appState = 'CFOP_ASSIST_PENDING';
+        stopActiveTimers();
+        hideMoveGuide();
+        resetTimerDisplay();
+        penaltyGroup.style.visibility = "hidden";
+        scrambleDisplay.textContent = "CFOPアシスト用に現在状態を取得中...";
+        timerSubtext.textContent = "";
+        await requestCurrentFacelets();
+    } catch (e) {
+        cfopFaceletsRequested = false;
+        appState = 'IDLE';
+        scrambleDisplay.textContent = "CFOPアシストを開始できませんでした";
+        timerSubtext.textContent = e.message;
+    }
+});
+
+resetCubeStateBtn.addEventListener('click', async () => {
+    try {
+        if (!cubeConnection) throw new Error("先にConnectしてください");
+        const ok = confirm("物理キューブが6面完成している時だけ実行してください。\n現在の状態をデバイス内部の完成状態として同期しますか？");
+        if (!ok) return;
+
+        appState = 'IDLE';
+        stopActiveTimers();
+        hideMoveGuide();
+        resetTimerDisplay();
+        resetVisualizerAlg();
+        scrambleDisplay.textContent = "デバイス状態を完成状態へ同期中...";
+        await resetCubeInternalState();
+        scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
+    } catch (e) {
+        scrambleDisplay.textContent = "状態同期に失敗しました";
+        timerSubtext.textContent = e.message;
+    }
+});
+
 resetBtn.addEventListener('click', () => {
     appState = 'IDLE';
     stopActiveTimers();
     resetTimerDisplay();
+    hideMoveGuide();
     assistFaceletsRequested = false;
+    cfopFaceletsRequested = false;
+    assistMode = 'normal';
+    cfopPhases = [];
     assistSequence = [];
     assistMistakeStack = [];
 
-    twistyElement.alg = "";
+    resetVisualizerAlg();
     scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
 });
 
@@ -389,7 +662,7 @@ connectBtn.addEventListener('click', async () => {
         await librariesReady;
         if (!connectGanCube) throw new Error("Bluetooth library is not loaded.");
 
-        cubeConnection = await connectGanCube();
+        cubeConnection = await connectGanCube(provideCubeMacAddress);
         statusBadge.textContent = "Connected";
         statusBadge.className = "status-badge connected";
         connectBtn.disabled = true;
@@ -399,6 +672,7 @@ connectBtn.addEventListener('click', async () => {
             if (ev.type === "MOVE") {
                 const now = Date.now();
                 const isUuShortcutMove = (ev.move==="U'"&&lastManualMove==="U") || (ev.move==="U"&&lastManualMove==="U'");
+                scheduleFaceletsRefresh();
 
                 if (appState === 'IDLE') {
                     if (uuShortcutEnabled && isUuShortcutMove && (now-lastManualMoveTime<=1000)) {
@@ -412,7 +686,7 @@ connectBtn.addEventListener('click', async () => {
 
                 if (appState === 'SCRAMBLING') {
                     moveLog.textContent = ev.move;
-                    twistyElement.experimentalAddMove(ev.move);
+                    applyRealMoveToVisualizer(ev.move);
 
                     let expected = scrambleSequence[currentScrambleStep];
 
@@ -467,9 +741,9 @@ connectBtn.addEventListener('click', async () => {
                     return;
                 }
 
-                if (appState === 'ASSISTING') {
+                if (appState === 'ASSISTING' || appState === 'CFOP_ASSISTING') {
                     moveLog.textContent = ev.move;
-                    twistyElement.experimentalAddMove(ev.move);
+                    applyRealMoveToVisualizer(ev.move, true);
 
                     const expected = assistSequence[currentAssistStep];
 
@@ -488,6 +762,9 @@ connectBtn.addEventListener('click', async () => {
                         if (currentAssistStep >= assistSequence.length) {
                             appState = 'IDLE';
                             assistSequence = [];
+                            cfopPhases = [];
+                            assistMode = 'normal';
+                            hideMoveGuide();
                             scrambleDisplay.textContent = "完成手順が完了しました";
                             timerSubtext.textContent = "";
                             playBeep(523, 'sine', 0.1);
@@ -517,7 +794,7 @@ connectBtn.addEventListener('click', async () => {
                     moveLog.textContent = ev.move;
                 }
 
-                twistyElement.experimentalAddMove(ev.move);
+                applyRealMoveToVisualizer(ev.move);
 
             } else if (ev.type === "BATTERY") {
                 setBatteryLevel(ev.batteryLevel);
@@ -526,10 +803,18 @@ connectBtn.addEventListener('click', async () => {
                 statusBadge.className = "status-badge";
                 connectBtn.disabled = false;
                 setBatteryLevel(null);
+                hideMoveGuide();
             } else if (ev.type === "FACELETS") {
+                showFaceletsLog(ev.facelets);
+
                 if (assistFaceletsRequested) {
                     assistFaceletsRequested = false;
                     startAssistFromFacelets(ev.facelets);
+                    return;
+                }
+                if (cfopFaceletsRequested) {
+                    cfopFaceletsRequested = false;
+                    startAssistFromFacelets(ev.facelets, 'cfop');
                     return;
                 }
 
@@ -558,6 +843,7 @@ connectBtn.addEventListener('click', async () => {
             }
         });
         await requestBatteryLevel();
+        await requestCurrentFacelets();
     } catch (e) {
         alert("Connection Error: " + e.message);
     }

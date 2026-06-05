@@ -206,6 +206,12 @@ h2 {
     font-weight: bold;
 }
 
+.cfop-phase {
+    color: #48abe0;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
+}
+
 .status-badge {
     padding: 2px 8px;
     border-radius: 10px;
@@ -235,6 +241,38 @@ h2 {
     background: #16213e;
     padding: 2px 8px;
     border-radius: 10px;
+}
+
+.mac-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 0.78rem;
+}
+
+.mac-input {
+    width: 128px;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid #2c5a84;
+    border-radius: 8px;
+    background: #16213e;
+    color: #ffffff;
+    padding: 5px 7px;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+}
+
+.mac-input::placeholder {
+    color: #6f8298;
+}
+
+.mac-input.invalid {
+    border-color: #e74c3c;
+    box-shadow: 0 0 0 1px rgba(231, 76, 60, 0.4);
 }
 
 .setting-row {
@@ -316,8 +354,16 @@ button.main-btn {
     margin-top: 0;
 }
 
+.btn-state-reset {
+    background: #2c7fb8;
+}
+
 .btn-assist {
     background: #16a085;
+}
+
+.btn-cfop-assist {
+    background: #2980b9;
 }
 
 .btn-clear {
