@@ -1,4 +1,4 @@
-window.onerror = function(msg, url, line) {
+﻿window.onerror = function(msg, url, line) {
     alert("Error: " + msg + "\nLine: " + line);
     return false;
 };
@@ -58,10 +58,12 @@ function playBeep(freq, type = 'sine', dur = 0.2) {
 // --- DOM Elements ---
 const getEl = id => document.getElementById(id);
 const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
-      assistBtn = getEl('assistBtn'), cfopAssistBtn = getEl('cfopAssistBtn'),
+      assistBtn = getEl('assistBtn'),
       resetCubeStateBtn = getEl('resetCubeStateBtn'), resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'),
       btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf'),
-      uuShortcutToggle = getEl('uuShortcutToggle');
+      uuShortcutToggle = getEl('uuShortcutToggle'),
+      moreBtn = getEl('moreBtn'), openToolsBtn = getEl('openToolsBtn'),
+      settingsModal = getEl('settingsModal'), closeSettingsBtn = getEl('closeSettingsBtn');
 const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'),
       scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
@@ -74,6 +76,8 @@ const stats = {
     worst: getEl('statWorst'),
     count: getEl('statCount')
 };
+twistyElement.setAttribute('camera-latitude-limits', '180');
+twistyElement.cameraLatitudeLimits = 180;
 
 // --- State Variables ---
 let cubeConnection = null;
@@ -85,8 +89,6 @@ let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
 let assistSequence = [], currentAssistStep = 0, assistMistakeStack = [];
 let assistFaceletsRequested = false;
 let assistMode = 'normal';
-let cfopFaceletsRequested = false;
-let cfopPhases = [];
 let lastManualMove = "", lastManualMoveTime = 0;
 
 let inspectInterval = null;
@@ -118,6 +120,23 @@ cubeMacInput.addEventListener('input', () => {
     } else if (cubeMacInput.value.trim() === "") {
         localStorage.removeItem(STORAGE_CUBE_MAC);
     }
+});
+
+function openSettings() {
+    settingsModal.classList.add('open');
+    settingsModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeSettings() {
+    settingsModal.classList.remove('open');
+    settingsModal.setAttribute('aria-hidden', 'true');
+}
+
+moreBtn.addEventListener('click', openSettings);
+openToolsBtn.addEventListener('click', openSettings);
+closeSettingsBtn.addEventListener('click', closeSettings);
+settingsModal.addEventListener('click', (ev) => {
+    if (ev.target === settingsModal) closeSettings();
 });
 
 // --- Format & Stats Logic ---
@@ -182,13 +201,15 @@ function startAssistPreview(move) {
 }
 
 function stopAssistPreview(restoreVisualState = true) {
+    const hasActivePreview = Boolean(assistPreviewMove || assistPreviewReverseTimer || assistPreviewLoopTimer);
+
     clearTimeout(assistPreviewReverseTimer);
     clearInterval(assistPreviewLoopTimer);
     assistPreviewReverseTimer = null;
     assistPreviewLoopTimer = null;
 
     setTwistyTempo(NORMAL_TEMPO_SCALE);
-    if (restoreVisualState) restoreAssistPreviewBase();
+    if (restoreVisualState && hasActivePreview) restoreAssistPreviewBase();
 
     assistPreviewMove = null;
     assistPreviewBaseAlg = "";
@@ -268,7 +289,7 @@ function showFaceletsLog(facelets) {
 }
 
 function scheduleFaceletsRefresh() {
-    if (!cubeConnection || assistFaceletsRequested || cfopFaceletsRequested) return;
+    if (!cubeConnection || assistFaceletsRequested) return;
     clearTimeout(faceletsRefreshTimer);
     faceletsRefreshTimer = setTimeout(() => {
         requestCurrentFacelets().catch(e => console.warn("Facelets refresh failed", e));
@@ -314,6 +335,35 @@ updateStats();
 // --- Game Logic ---
 function getReverseTurn(m) { return m.endsWith("'") ? m[0] : (m.endsWith("2") ? m : m + "'"); }
 
+function getTurnAmount(move) {
+    if (!move) return 0;
+    if (move.endsWith("2")) return 2;
+    return move.endsWith("'") ? 3 : 1;
+}
+
+function formatTurn(face, amount) {
+    const normalized = ((amount % 4) + 4) % 4;
+    if (normalized === 0) return null;
+    if (normalized === 2) return face + "2";
+    return normalized === 3 ? face + "'" : face;
+}
+
+function normalizeMoveSequence(moves) {
+    return moves.reduce((sequence, move) => {
+        const last = sequence[sequence.length - 1];
+        if (!last || last[0] !== move[0]) return sequence.concat(move);
+
+        const combinedMove = formatTurn(move[0], getTurnAmount(last) + getTurnAmount(move));
+        return combinedMove
+            ? sequence.slice(0, -1).concat(combinedMove)
+            : sequence.slice(0, -1);
+    }, []);
+}
+
+function getCorrectionSequence(mistakes) {
+    return normalizeMoveSequence(mistakes).slice().reverse().map(move => getReverseTurn(move));
+}
+
 function reverseAlgSequence(alg) {
     if (!alg || typeof alg !== 'string') return "";
     return alg.trim().split(/\s+/).reverse().map(m => getReverseTurn(m)).join(" ");
@@ -335,77 +385,6 @@ function solveFacelets(facelets) {
     return splitAlg(cube.solve());
 }
 
-function faceletsAfterMoves(facelets, moves) {
-    const cube = Cube.fromString(cleanFacelets(facelets));
-    if (moves.length > 0) cube.move(moves.join(" "));
-    return cube.asString();
-}
-
-function hasSolvedCross(facelets) {
-    return facelets[28] === 'D' && facelets[30] === 'D' && facelets[32] === 'D' && facelets[34] === 'D' &&
-           facelets[16] === 'R' && facelets[25] === 'F' && facelets[43] === 'L' && facelets[52] === 'B';
-}
-
-function hasSolvedF2L(facelets) {
-    const solvedRanges = [
-        [12, 17, 'R'],
-        [21, 26, 'F'],
-        [39, 44, 'L'],
-        [48, 53, 'B'],
-        [27, 35, 'D']
-    ];
-    return solvedRanges.every(([start, end, color]) => {
-        for (let i = start; i <= end; i++) {
-            if (facelets[i] !== color) return false;
-        }
-        return true;
-    });
-}
-
-function hasSolvedOLL(facelets) {
-    for (let i = 0; i <= 8; i++) {
-        if (facelets[i] !== 'U') return false;
-    }
-    return true;
-}
-
-function makeCfopPhases(facelets, sequence) {
-    const targets = [
-        { key: 'cross', label: 'Cross', test: hasSolvedCross },
-        { key: 'f2l', label: 'F2L', test: hasSolvedF2L },
-        { key: 'oll', label: 'OLL', test: hasSolvedOLL },
-        { key: 'pll', label: 'PLL', test: checkIsSolved }
-    ];
-    const phases = [];
-    let start = 0;
-
-    targets.forEach((target, targetIndex) => {
-        let end = sequence.length;
-        for (let i = start; i <= sequence.length; i++) {
-            const state = faceletsAfterMoves(facelets, sequence.slice(0, i));
-            if (target.test(state)) {
-                end = i;
-                break;
-            }
-        }
-
-        if (end === start && targetIndex < targets.length - 1) return;
-        phases.push({ ...target, start, end });
-        start = end;
-    });
-
-    if (phases.length === 0 || phases[phases.length - 1].end < sequence.length) {
-        phases.push({ key: 'pll', label: 'PLL', start, end: sequence.length });
-    }
-
-    return phases;
-}
-
-function getCurrentCfopPhase() {
-    return cfopPhases.find(phase => currentAssistStep < phase.end) || cfopPhases[cfopPhases.length - 1];
-}
-
-// WCA Random State Scramble の生成
 function generateScramble() {
     if (typeof Cube !== 'undefined' && solverInitialized) {
         try {
@@ -413,13 +392,11 @@ function generateScramble() {
                 return Cube.scramble().split(' ');
             }
 
-            // Random Stateの逆手順(スクランブル)を取得
             const solveAlg = Cube.random().solve();
             return reverseAlgSequence(solveAlg).split(' ');
         } catch(e) { console.warn("Random state scramble failed", e); }
     }
 
-    // フォールバック（180度回転含むランダムムーブ）
     const faces = ['U','D','R','L','F','B'], mods = ['',"'", '2'];
     let scr = [], last = '', sec = '';
     for (let i = 0; i < 21; i++) {
@@ -436,14 +413,17 @@ function renderScrambleUI() {
     if (appState !== 'SCRAMBLING') return;
 
     if (mistakeStack.length > 0) {
-        const correctionSteps = mistakeStack.slice().reverse().map((move, i) => {
+        const correctionSequence = getCorrectionSequence(mistakeStack);
+        updateMoveGuide(correctionSequence[0]);
+        const correctionSteps = correctionSequence.map((move, i) => {
             const className = i === 0 ? 'scramble-correction' : 'scramble-correction-queue';
-            return `<span class="scramble-step ${className}">${getReverseTurn(move)}</span>`;
+            return `<span class="scramble-step ${className}">${move}</span>`;
         });
-        scrambleDisplay.innerHTML = "<div style='color:#e74c3c; margin-bottom:5px;'>❌ 巻き戻し手順:</div>" + correctionSteps.join("");
+        scrambleDisplay.innerHTML = "<div style='color:#e74c3c; margin-bottom:5px;'>巻き戻し手順:</div>" + correctionSteps.join("");
         return;
     }
 
+    updateMoveGuide(scrambleSequence[currentScrambleStep]);
     scrambleDisplay.innerHTML = scrambleSequence.map((move, i) => {
         let className = '';
         if (i < currentScrambleStep) className = 'scramble-completed';
@@ -453,22 +433,21 @@ function renderScrambleUI() {
 }
 
 function renderAssistUI() {
-    if (appState !== 'ASSISTING' && appState !== 'CFOP_ASSISTING') return;
+    if (appState !== 'ASSISTING') return;
 
     if (assistMistakeStack.length > 0) {
-        updateMoveGuide(getReverseTurn(assistMistakeStack[assistMistakeStack.length - 1]));
-        const correctionSteps = assistMistakeStack.slice().reverse().map((move, i) => {
+        const correctionSequence = getCorrectionSequence(assistMistakeStack);
+        updateMoveGuide(correctionSequence[0]);
+        const correctionSteps = correctionSequence.map((move, i) => {
             const className = i === 0 ? 'scramble-correction' : 'scramble-correction-queue';
-            return `<span class="scramble-step ${className}">${getReverseTurn(move)}</span>`;
+            return `<span class="scramble-step ${className}">${move}</span>`;
         });
-        scrambleDisplay.innerHTML = "<div style='color:#e74c3c; margin-bottom:5px;'>❌ 巻き戻し手順:</div>" + correctionSteps.join("");
+        scrambleDisplay.innerHTML = "<div style='color:#e74c3c; margin-bottom:5px;'>巻き戻し手順:</div>" + correctionSteps.join("");
         return;
     }
 
     const remaining = assistSequence.length - currentAssistStep;
     updateMoveGuide(assistSequence[currentAssistStep]);
-    const phase = assistMode === 'cfop' ? getCurrentCfopPhase() : null;
-    const phaseText = phase ? `<div class="cfop-phase">CFOP: ${phase.label}</div>` : "";
     const steps = assistSequence.map((move, i) => {
         let className = '';
         if (i < currentAssistStep) className = 'scramble-completed';
@@ -476,16 +455,15 @@ function renderAssistUI() {
         return `<span class="scramble-step ${className}">${move}</span>`;
     }).join("");
 
-    scrambleDisplay.innerHTML = `<div class="assist-header">アシスト中: 残り ${remaining} 手</div>${phaseText}${steps}`;
+    scrambleDisplay.innerHTML = `<div class="assist-header">アシスト中: 残り ${remaining} 手</div>${steps}`;
 }
 
-function startAssistFromFacelets(facelets, mode = 'normal') {
+function startAssistFromFacelets(facelets) {
     try {
         assistSequence = solveFacelets(facelets);
         currentAssistStep = 0;
         assistMistakeStack = [];
-        assistMode = mode;
-        cfopPhases = mode === 'cfop' ? makeCfopPhases(facelets, assistSequence) : [];
+        assistMode = 'normal';
 
         if (assistSequence.length === 0) {
             appState = 'IDLE';
@@ -495,7 +473,7 @@ function startAssistFromFacelets(facelets, mode = 'normal') {
             return;
         }
 
-        appState = mode === 'cfop' ? 'CFOP_ASSISTING' : 'ASSISTING';
+        appState = 'ASSISTING';
         stopActiveTimers();
         resetTimerDisplay();
         penaltyGroup.style.visibility = "hidden";
@@ -544,7 +522,7 @@ scrambleBtn.addEventListener('click', () => {
     mistakeStack = [];
     appState = 'SCRAMBLING';
 
-    resetVisualizerAlg(); // 仮想キューブを完成状態にリセット
+    resetVisualizerAlg();
     resetTimerDisplay();
     penaltyGroup.style.visibility = "hidden";
 
@@ -559,7 +537,6 @@ assistBtn.addEventListener('click', async () => {
         if (!Cube || !solverInitialized) throw new Error("Solver is not loaded.");
 
         assistFaceletsRequested = true;
-        cfopFaceletsRequested = false;
         appState = 'ASSIST_PENDING';
         stopActiveTimers();
         hideMoveGuide();
@@ -572,31 +549,6 @@ assistBtn.addEventListener('click', async () => {
         assistFaceletsRequested = false;
         appState = 'IDLE';
         scrambleDisplay.textContent = "アシストを開始できませんでした";
-        timerSubtext.textContent = e.message;
-    }
-});
-
-cfopAssistBtn.addEventListener('click', async () => {
-    initAudio();
-    try {
-        await librariesReady;
-        if (!cubeConnection) throw new Error("先にConnectしてください");
-        if (!Cube || !solverInitialized) throw new Error("Solver is not loaded.");
-
-        assistFaceletsRequested = false;
-        cfopFaceletsRequested = true;
-        appState = 'CFOP_ASSIST_PENDING';
-        stopActiveTimers();
-        hideMoveGuide();
-        resetTimerDisplay();
-        penaltyGroup.style.visibility = "hidden";
-        scrambleDisplay.textContent = "CFOPアシスト用に現在状態を取得中...";
-        timerSubtext.textContent = "";
-        await requestCurrentFacelets();
-    } catch (e) {
-        cfopFaceletsRequested = false;
-        appState = 'IDLE';
-        scrambleDisplay.textContent = "CFOPアシストを開始できませんでした";
         timerSubtext.textContent = e.message;
     }
 });
@@ -627,9 +579,7 @@ resetBtn.addEventListener('click', () => {
     resetTimerDisplay();
     hideMoveGuide();
     assistFaceletsRequested = false;
-    cfopFaceletsRequested = false;
     assistMode = 'normal';
-    cfopPhases = [];
     assistSequence = [];
     assistMistakeStack = [];
 
@@ -686,28 +636,23 @@ connectBtn.addEventListener('click', async () => {
 
                 if (appState === 'SCRAMBLING') {
                     moveLog.textContent = ev.move;
-                    applyRealMoveToVisualizer(ev.move);
+                    applyRealMoveToVisualizer(ev.move, true);
 
                     let expected = scrambleSequence[currentScrambleStep];
 
-                    // 180度回転 (R2等) の「半回転アシスト」ロジック
-                    // ミスがなく、期待される手順が '2' を含み、回した面が合っている場合
                     if (expected && expected.includes('2') && mistakeStack.length === 0 && ev.move[0] === expected[0]) {
-                        // R2期待時にRを回したら、残りの必要手順を「R」に書き換える（R'ならR'）
                         scrambleSequence[currentScrambleStep] = ev.move;
                         renderScrambleUI();
                         return;
                     }
 
-                    // 通常のミストラッキング・進行ロジック
                     if (mistakeStack.length > 0) {
-                        if (ev.move === getReverseTurn(mistakeStack[mistakeStack.length-1])) mistakeStack.pop();
-                        else mistakeStack.push(ev.move);
+                        mistakeStack = normalizeMoveSequence(mistakeStack.concat(ev.move));
                     } else if (ev.move === expected) {
                         currentScrambleStep++;
 
-                        // スクランブル完了
                         if (currentScrambleStep >= scrambleSequence.length) {
+                            hideMoveGuide();
                             appState = 'INSPECTION';
                             inspectStartTime = Date.now();
                             inspectWarn8 = false;
@@ -734,14 +679,14 @@ connectBtn.addEventListener('click', async () => {
                             return;
                         }
                     } else {
-                        mistakeStack.push(ev.move);
+                        mistakeStack = normalizeMoveSequence(mistakeStack.concat(ev.move));
                     }
 
                     renderScrambleUI();
                     return;
                 }
 
-                if (appState === 'ASSISTING' || appState === 'CFOP_ASSISTING') {
+                if (appState === 'ASSISTING') {
                     moveLog.textContent = ev.move;
                     applyRealMoveToVisualizer(ev.move, true);
 
@@ -754,15 +699,13 @@ connectBtn.addEventListener('click', async () => {
                     }
 
                     if (assistMistakeStack.length > 0) {
-                        if (ev.move === getReverseTurn(assistMistakeStack[assistMistakeStack.length - 1])) assistMistakeStack.pop();
-                        else assistMistakeStack.push(ev.move);
+                        assistMistakeStack = normalizeMoveSequence(assistMistakeStack.concat(ev.move));
                     } else if (ev.move === expected) {
                         currentAssistStep++;
 
                         if (currentAssistStep >= assistSequence.length) {
                             appState = 'IDLE';
                             assistSequence = [];
-                            cfopPhases = [];
                             assistMode = 'normal';
                             hideMoveGuide();
                             scrambleDisplay.textContent = "完成手順が完了しました";
@@ -772,23 +715,25 @@ connectBtn.addEventListener('click', async () => {
                             return;
                         }
                     } else {
-                        assistMistakeStack.push(ev.move);
+                        assistMistakeStack = normalizeMoveSequence(assistMistakeStack.concat(ev.move));
                     }
 
                     renderAssistUI();
                     return;
                 }
 
-                if (appState === 'INSPECTION') {
-                    stopActiveTimers();
-                    const elapsed = (now - inspectStartTime) / 1000;
-                    currentSolvePenalty = (elapsed > 17) ? 'DNF' : (elapsed > 15) ? '+2' : '';
+                    if (appState === 'INSPECTION') {
+                        stopActiveTimers();
+                        const elapsed = (now - inspectStartTime) / 1000;
+                        currentSolvePenalty = (elapsed > 17) ? 'DNF' : (elapsed > 15) ? '+2' : '';
 
-                    appState = 'SOLVING';
-                    startTime = now;
+                        appState = 'SOLVING';
+                        startTime = now;
+                        scrambleDisplay.innerHTML = "<span style='color:#0fdb92;'>計測中...</span>";
+                        timerSubtext.textContent = "Completedで自動停止";
 
-                    startRealtimeTimer();
-                }
+                        startRealtimeTimer();
+                    }
 
                 if (appState !== 'SOLVING') {
                     moveLog.textContent = ev.move;
@@ -810,11 +755,6 @@ connectBtn.addEventListener('click', async () => {
                 if (assistFaceletsRequested) {
                     assistFaceletsRequested = false;
                     startAssistFromFacelets(ev.facelets);
-                    return;
-                }
-                if (cfopFaceletsRequested) {
-                    cfopFaceletsRequested = false;
-                    startAssistFromFacelets(ev.facelets, 'cfop');
                     return;
                 }
 

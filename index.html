@@ -8,74 +8,83 @@
     <script type="module" src="https://cdn.cubing.net/js/cubing/twisty"></script>
 </head>
 <body>
-
-<header><h1 class="app-title">GAN Cube Smart Timer Pro</h1></header>
-
-<div class="main-layout">
-    <div class="visualizer-area">
-        <twisty-player id="cubeVisualizer" visualization="3D" control-panel="none" back-view="none" background="none" tempo-scale="2"></twisty-player>
-    </div>
-
-    <div class="info-area">
-        <div class="card">
-            <h2>⏱️ Solve Timer</h2>
-            <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
-
-            <div class="timer-container" id="timerArea">
-                <div id="timerDisplay">0.00</div>
-                <div id="timerSubtext"></div>
-            </div>
-
-            <div class="penalty-group" id="penaltyGroup">
-                <button class="pen-btn ok-active" id="btnOk">OK</button>
-                <button class="pen-btn" id="btnPlus2">+2</button>
-                <button class="pen-btn" id="btnDnf">DNF</button>
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-box"><div class="stat-label">PB</div><span id="statPb">--</span></div>
-                <div class="stat-box"><div class="stat-label">Ao5</div><span id="statAo5">--</span></div>
-                <div class="stat-box"><div class="stat-label">Ao12</div><span id="statAo12">--</span></div>
-                <div class="stat-box"><div class="stat-label">Best</div><span id="statBest">--</span></div>
-                <div class="stat-box"><div class="stat-label">Worst</div><span id="statWorst">--</span></div>
-                <div class="stat-box"><div class="stat-label">Solves</div><span id="statCount">0</span></div>
-            </div>
-
-            <button class="main-btn btn-scramble" id="scrambleBtn">🎲 スクランブル生成</button>
-        </div>
-
-        <div class="card split-card">
-            <div class="panel">
-                <h2>Connection</h2>
+<main class="app-shell">
+    <header class="app-header">
+        <div>
+            <h1 class="app-title">GAN Cube Timer</h1>
+            <div class="status-line">
                 <span id="statusBadge" class="status-badge">Disconnected</span>
-                <div class="battery-row">
-                    <span>Battery</span>
-                    <span id="batteryLevel" class="battery-value">--</span>
-                </div>
-                <label class="mac-row">
-                    <span>MAC</span>
-                    <input id="cubeMacInput" class="mac-input" type="text" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" spellcheck="false">
-                </label>
-                <button class="main-btn btn-compact" id="connectBtn">Connect</button>
-            </div>
-            <div class="panel">
-                <h2>Tools</h2>
-                <div class="setting-row">
-                    <span>U U' 自動生成</span>
-                    <label class="switch" for="uuShortcutToggle">
-                        <input type="checkbox" id="uuShortcutToggle">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <button class="main-btn btn-compact btn-assist" id="assistBtn">アシスト</button>
-                <button class="main-btn btn-compact btn-cfop-assist" id="cfopAssistBtn">CFOPアシスト</button>
-                <button class="main-btn btn-compact btn-state-reset" id="resetCubeStateBtn">状態を完成に同期</button>
-                <button class="main-btn btn-compact btn-reset" id="resetBtn">仮想キューブをリセット</button>
-                <button class="main-btn btn-compact btn-clear" id="clearSessionBtn">履歴クリア</button>
+                <span class="battery-pill">電池 <strong id="batteryLevel">--</strong></span>
             </div>
         </div>
+        <button class="icon-btn" id="moreBtn" type="button" aria-label="設定">⚙</button>
+    </header>
+
+    <section class="visualizer-area" aria-label="仮想キューブ">
+        <twisty-player id="cubeVisualizer" visualization="3D" control-panel="none" back-view="none" background="none" tempo-scale="2" camera-latitude-limits="180"></twisty-player>
+    </section>
+
+    <section class="timer-card">
+        <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
+
+        <div class="timer-container" id="timerArea">
+            <div id="timerDisplay">0.00</div>
+            <div id="timerSubtext"></div>
+        </div>
+
+        <div class="penalty-group" id="penaltyGroup">
+            <button class="pen-btn ok-active" id="btnOk" type="button">OK</button>
+            <button class="pen-btn" id="btnPlus2" type="button">+2</button>
+            <button class="pen-btn" id="btnDnf" type="button">DNF</button>
+        </div>
+
+        <div class="stats-strip">
+            <div class="stat-box"><span id="statPb">--</span><div class="stat-label">PB</div></div>
+            <div class="stat-box"><span id="statAo5">--</span><div class="stat-label">Ao5</div></div>
+            <div class="stat-box"><span id="statAo12">--</span><div class="stat-label">Ao12</div></div>
+            <div class="stat-box"><span id="statCount">0</span><div class="stat-label">Solves</div></div>
+            <div class="stat-box stat-secondary"><span id="statBest">--</span><div class="stat-label">Best</div></div>
+            <div class="stat-box stat-secondary"><span id="statWorst">--</span><div class="stat-label">Worst</div></div>
+        </div>
+    </section>
+
+    <nav class="action-grid" aria-label="主要操作">
+        <button class="main-btn btn-connect" id="connectBtn" type="button">接続</button>
+        <button class="main-btn btn-scramble" id="scrambleBtn" type="button">スクランブル</button>
+        <button class="main-btn btn-assist" id="assistBtn" type="button">アシスト</button>
+        <button class="main-btn btn-more" id="openToolsBtn" type="button">ツール</button>
+    </nav>
+</main>
+
+<div class="modal-backdrop" id="settingsModal" aria-hidden="true">
+    <section class="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <div class="sheet-header">
+            <h2 id="settingsTitle">ツール</h2>
+            <button class="icon-btn" id="closeSettingsBtn" type="button" aria-label="閉じる">×</button>
+        </div>
+
+        <div class="settings-section">
+            <label class="setting-row">
+                <span>U U' 自動スクランブル</span>
+                <span class="switch">
+                    <input type="checkbox" id="uuShortcutToggle">
+                    <span class="slider"></span>
+                </span>
+            </label>
+            <label class="mac-row">
+                <span>Cube MAC</span>
+                <input id="cubeMacInput" class="mac-input" type="text" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" spellcheck="false">
+            </label>
+        </div>
+
+        <div class="settings-actions">
+            <button class="main-btn btn-state-reset" id="resetCubeStateBtn" type="button">状態を完成に同期</button>
+            <button class="main-btn btn-reset" id="resetBtn" type="button">仮想キューブをリセット</button>
+            <button class="main-btn btn-clear" id="clearSessionBtn" type="button">履歴クリア</button>
+        </div>
+
         <div id="moveLog">Waiting for moves...</div>
-    </div>
+    </section>
 </div>
 
 <script src="app.js"></script>
