@@ -7,6 +7,7 @@ let connectGanCube = null;
 let Cube = null;
 let solverInitialized = false;
 const STORAGE_SESSION = 'ganTimerSession';
+const STORAGE_SOLVE_LOGS = 'ganTimerSolveLogs';
 const STORAGE_UU_SHORTCUT = 'ganTimerUuShortcutEnabled';
 const STORAGE_CUBE_MAC = 'ganTimerCubeMacAddress';
 const IDLE_SCRAMBLE_TEXT = 'Push "Generate Scramble" or [ U U\' ]';
@@ -83,12 +84,16 @@ const getEl = id => document.getElementById(id);
 const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
       assistBtn = getEl('assistBtn'),
       resetCubeStateBtn = getEl('resetCubeStateBtn'), resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'),
+      clearSolveLogsBtn = getEl('clearSolveLogsBtn'),
+      replaySpeedSelect = getEl('replaySpeedSelect'), replaySeekBar = getEl('replaySeekBar'), replaySeekTime = getEl('replaySeekTime'),
+      timerPageBtn = getEl('timerPageBtn'), logPageBtn = getEl('logPageBtn'),
       btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf'),
       uuShortcutToggle = getEl('uuShortcutToggle'),
       moreBtn = getEl('moreBtn'), openToolsBtn = getEl('openToolsBtn'),
       settingsModal = getEl('settingsModal'), closeSettingsBtn = getEl('closeSettingsBtn');
 const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'),
       scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'),
+      solveLogList = getEl('solveLogList'), timerPage = getEl('timerPage'), logPage = getEl('logPage'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
       penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput'),
       cameraResetBtn = getEl('cameraResetBtn');
@@ -565,6 +570,7 @@ visualizerReady = initCustomVisualizer().catch(e => {
 let cubeConnection = null;
 let appState = 'IDLE';
 let solveTimes = JSON.parse(localStorage.getItem(STORAGE_SESSION)) || [];
+let solveLogs = JSON.parse(localStorage.getItem(STORAGE_SOLVE_LOGS)) || [];
 let uuShortcutEnabled = localStorage.getItem(STORAGE_UU_SHORTCUT) !== 'false';
 
 let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
@@ -579,6 +585,11 @@ let faceletsRefreshTimer = null;
 let startTime = 0, inspectStartTime = 0;
 let inspectWarn8 = false, inspectWarn12 = false;
 let currentSolvePenalty = "";
+let currentSolveMoves = [];
+let currentSolveScramble = [];
+let replayToken = 0;
+let activeReplayIndex = null;
+let replaySeekActive = false;
 let assistPreviewMove = null;
 let assistPreviewReverseTimer = null;
 let assistPreviewLoopTimer = null;
@@ -625,6 +636,17 @@ closeSettingsBtn.addEventListener('click', closeSettings);
 settingsModal.addEventListener('click', (ev) => {
     if (ev.target === settingsModal) closeSettings();
 });
+
+function showMainPage(page) {
+    const showLog = page === 'log';
+    timerPage?.classList.toggle('active', !showLog);
+    logPage?.classList.toggle('active', showLog);
+    timerPageBtn?.classList.toggle('active', !showLog);
+    logPageBtn?.classList.toggle('active', showLog);
+}
+
+timerPageBtn?.addEventListener('click', () => showMainPage('timer'));
+logPageBtn?.addEventListener('click', () => showMainPage('log'));
 
 cameraResetBtn.addEventListener('click', () => {
     customViewer?.resetCamera();
@@ -805,8 +827,10 @@ function clearPendingVisualMove(flush = true) {
     if (!pendingVisualMove) return;
     clearTimeout(pendingVisualMove.timer);
     const move = pendingVisualMove.move;
+    const t = pendingVisualMove.t;
     pendingVisualMove = null;
     if (flush) {
+        recordSolveVisualMove(move, t);
         appendVisualizerMove(move);
         customViewer?.addMove(move);
     }
@@ -814,6 +838,14 @@ function clearPendingVisualMove(flush = true) {
 
 function appendVisualizerMove(move) {
     visualizerAlg = [visualizerAlg, move].filter(Boolean).join(" ");
+}
+
+function recordSolveVisualMove(move, t = Date.now() - startTime) {
+    if (appState !== 'SOLVING') return;
+    currentSolveMoves.push({
+        move,
+        t: Math.max(0, Math.round(t))
+    });
 }
 
 function getSliceMoveFromPair(firstMove, secondMove) {
@@ -844,12 +876,15 @@ function getSliceMoveFromPair(firstMove, secondMove) {
 function queueVisualMove(move) {
     if (!move) return;
     const normalizedMove = normalizeReportedMoveForVisualizer(move);
+    const moveTime = appState === 'SOLVING' ? Date.now() - startTime : 0;
 
     if (pendingVisualMove) {
         const sliceMove = getSliceMoveFromPair(pendingVisualMove.move, normalizedMove);
         if (sliceMove) {
             clearTimeout(pendingVisualMove.timer);
+            const sliceTime = pendingVisualMove.t;
             pendingVisualMove = null;
+            recordSolveVisualMove(sliceMove, sliceTime);
             appendVisualizerMove(sliceMove);
             applySliceFaceMap(sliceMove);
             customViewer?.addMove(sliceMove);
@@ -861,9 +896,12 @@ function queueVisualMove(move) {
 
     pendingVisualMove = {
         move: normalizedMove,
+        t: moveTime,
         timer: setTimeout(() => {
             if (!pendingVisualMove || pendingVisualMove.move !== normalizedMove) return;
+            const t = pendingVisualMove.t;
             pendingVisualMove = null;
+            recordSolveVisualMove(normalizedMove, t);
             appendVisualizerMove(normalizedMove);
             customViewer?.addMove(normalizedMove);
         }, SLICE_MOVE_PAIR_WINDOW_MS)
@@ -991,6 +1029,212 @@ function updateStats() {
     btnDnf.className = 'pen-btn ' + (last.penalty === 'DNF' ? 'active' : '');
 }
 updateStats();
+
+function formatSolveLogTime(log) {
+    if (log.penalty === 'DNF') return 'DNF';
+    if (log.penalty === '+2') return formatTime(log.timeMs + 2000) + '+';
+    return formatTime(log.timeMs);
+}
+
+function saveSolveLogs() {
+    localStorage.setItem(STORAGE_SOLVE_LOGS, JSON.stringify(solveLogs.slice(0, 10)));
+}
+
+function addSolveLog(log) {
+    solveLogs = [log].concat(solveLogs).slice(0, 10);
+    saveSolveLogs();
+    renderSolveLogs();
+}
+
+function updateLatestSolveLogPenalty(penalty) {
+    if (solveLogs.length === 0) return;
+    solveLogs[0].penalty = penalty;
+    saveSolveLogs();
+    renderSolveLogs();
+}
+
+function getSolveLogMoveEntries(log) {
+    return (log.moves || []).map((entry, index) => {
+        if (typeof entry === 'string') {
+            return { move: entry, t: index * 350 };
+        }
+        return {
+            move: entry.move,
+            t: Number.isFinite(entry.t) ? entry.t : index * 350
+        };
+    }).filter(entry => entry.move);
+}
+
+function getReplaySpeed() {
+    const speed = Number.parseFloat(replaySpeedSelect?.value || '1');
+    return Number.isFinite(speed) && speed > 0 ? speed : 1;
+}
+
+function getSolveLogDuration(log) {
+    const moveEntries = getSolveLogMoveEntries(log);
+    const lastMoveTime = moveEntries.length ? moveEntries[moveEntries.length - 1].t : 0;
+    return Math.max(log.timeMs || 0, lastMoveTime);
+}
+
+function formatReplayTime(ms) {
+    return (ms / 1000).toFixed(2);
+}
+
+function updateReplaySeekUI(positionMs, durationMs) {
+    if (!replaySeekBar || !replaySeekTime) return;
+    const duration = Math.max(0, Math.round(durationMs || 0));
+    const position = Math.min(duration, Math.max(0, Math.round(positionMs || 0)));
+    replaySeekBar.disabled = duration === 0;
+    replaySeekBar.max = String(duration);
+    replaySeekBar.value = String(position);
+    replaySeekTime.textContent = `${formatReplayTime(position)} / ${formatReplayTime(duration)}`;
+}
+
+function applyReplayPosition(log, elapsedMs) {
+    const moves = getSolveLogMoveEntries(log)
+        .filter(entry => entry.t <= elapsedMs)
+        .map(entry => entry.move);
+    customViewer?.setAlg([log.scramble.join(' '), moves.join(' ')].filter(Boolean).join(' '));
+    moveLog.textContent = moves.length ? `REPLAY: ${moves[moves.length - 1]}` : 'REPLAY: start';
+}
+
+async function waitForReplayTime(token, replayStartedAt, startElapsed, targetElapsed, duration, speed) {
+    while (token === replayToken) {
+        const currentElapsed = startElapsed + ((performance.now() - replayStartedAt) * speed);
+        if (!replaySeekActive) updateReplaySeekUI(Math.min(currentElapsed, duration), duration);
+        const remaining = targetElapsed - currentElapsed;
+        if (remaining <= 0) return;
+        await new Promise(resolve => setTimeout(resolve, Math.min(50, remaining / speed)));
+    }
+}
+
+function renderSolveLogs() {
+    if (!solveLogList) return;
+    solveLogList.replaceChildren();
+
+    if (solveLogs.length === 0) {
+        activeReplayIndex = null;
+        updateReplaySeekUI(0, 0);
+        const empty = document.createElement('div');
+        empty.className = 'solve-log-empty';
+        empty.textContent = 'まだ記録がありません';
+        solveLogList.appendChild(empty);
+        return;
+    }
+
+    solveLogs.forEach((log, index) => {
+        const item = document.createElement('div');
+        item.className = 'solve-log-item';
+
+        const body = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'solve-log-title';
+        title.textContent = `${index + 1}. ${formatSolveLogTime(log)}`;
+
+        const meta = document.createElement('div');
+        meta.className = 'solve-log-meta';
+        const moveEntries = getSolveLogMoveEntries(log);
+        meta.textContent = `${moveEntries.length} moves / ${new Date(log.date).toLocaleString()}`;
+
+        const scramble = document.createElement('div');
+        scramble.className = 'solve-log-meta solve-log-scramble';
+        scramble.textContent = log.scramble.join(' ');
+
+        body.append(title, meta, scramble);
+
+        const replayBtn = document.createElement('button');
+        replayBtn.className = 'mini-btn';
+        replayBtn.type = 'button';
+        replayBtn.textContent = '再生';
+        replayBtn.addEventListener('click', () => replaySolveLog(index));
+
+        item.append(body, replayBtn);
+        solveLogList.appendChild(item);
+    });
+}
+
+async function replaySolveLog(index, startElapsedMs = 0) {
+    const log = solveLogs[index];
+    if (!log || !customViewer) return;
+
+    const moveEntries = getSolveLogMoveEntries(log);
+    const duration = getSolveLogDuration(log);
+    const startElapsed = Math.min(duration, Math.max(0, startElapsedMs));
+    const speed = getReplaySpeed();
+    const token = ++replayToken;
+    activeReplayIndex = index;
+    appState = 'REPLAYING';
+    stopActiveTimers();
+    hideMoveGuide();
+    closeSettings();
+    showMainPage('log');
+    penaltyGroup.style.visibility = "hidden";
+    timerDisplay.textContent = formatSolveLogTime(log);
+    timerDisplay.style.color = "#93c5fd";
+    timerSubtext.textContent = `ソルブログ再生中 ${speed}x`;
+    scrambleDisplay.textContent = log.scramble.join(' ');
+
+    setTwistyTempo(Math.max(0.25, NORMAL_TEMPO_SCALE * speed));
+    applyReplayPosition(log, startElapsed);
+    updateReplaySeekUI(startElapsed, duration);
+
+    const replayStartedAt = performance.now();
+    let lastMovePromise = Promise.resolve();
+    for (const entry of moveEntries.filter(move => move.t > startElapsed)) {
+        if (token !== replayToken) return;
+        await waitForReplayTime(token, replayStartedAt, startElapsed, entry.t, duration, speed);
+        if (token !== replayToken) return;
+        if (!replaySeekActive) updateReplaySeekUI(entry.t, duration);
+        moveLog.textContent = `REPLAY: ${entry.move}`;
+        lastMovePromise = customViewer.addMove(entry.move);
+    }
+    await lastMovePromise;
+
+    if (token !== replayToken) return;
+    updateReplaySeekUI(duration, duration);
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    appState = 'IDLE';
+    timerSubtext.textContent = "Replay complete";
+}
+
+function seekActiveReplay(positionMs, resumePlayback = false) {
+    if (activeReplayIndex === null || !solveLogs[activeReplayIndex]) return;
+    const log = solveLogs[activeReplayIndex];
+    const duration = getSolveLogDuration(log);
+    const position = Math.min(duration, Math.max(0, Number(positionMs) || 0));
+    replayToken++;
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    applyReplayPosition(log, position);
+    updateReplaySeekUI(position, duration);
+    timerDisplay.textContent = formatSolveLogTime(log);
+    timerDisplay.style.color = "#93c5fd";
+    timerSubtext.textContent = resumePlayback ? `ソルブログ再生中 ${getReplaySpeed()}x` : "シーク中";
+
+    if (resumePlayback && position < duration) {
+        replaySolveLog(activeReplayIndex, position);
+    } else if (position >= duration) {
+        appState = 'IDLE';
+        timerSubtext.textContent = "Replay complete";
+    }
+}
+
+replaySeekBar?.addEventListener('pointerdown', () => {
+    replaySeekActive = true;
+    replayToken++;
+});
+
+replaySeekBar?.addEventListener('input', () => {
+    if (activeReplayIndex === null) return;
+    seekActiveReplay(Number(replaySeekBar.value), false);
+});
+
+replaySeekBar?.addEventListener('change', () => {
+    if (activeReplayIndex === null) return;
+    replaySeekActive = false;
+    seekActiveReplay(Number(replaySeekBar.value), true);
+});
+
+renderSolveLogs();
 
 // --- Game Logic ---
 function getReverseTurn(m) { return m.endsWith("'") ? m[0] : (m.endsWith("2") ? m : m + "'"); }
@@ -1241,10 +1485,15 @@ function checkIsSolved(cleanStr) {
 // --- Actions ---
 scrambleBtn.addEventListener('click', () => {
     initAudio();
+    replayToken++;
+    activeReplayIndex = null;
+    showMainPage('timer');
     stopActiveTimers();
     hideMoveGuide();
 
     scrambleSequence = generateScramble();
+    currentSolveScramble = scrambleSequence.slice();
+    currentSolveMoves = [];
     currentScrambleStep = 0;
     mistakeStack = [];
     appState = 'SCRAMBLING';
@@ -1258,6 +1507,9 @@ scrambleBtn.addEventListener('click', () => {
 
 assistBtn.addEventListener('click', async () => {
     initAudio();
+    replayToken++;
+    activeReplayIndex = null;
+    showMainPage('timer');
     try {
         await librariesReady;
         if (!cubeConnection) throw new Error("先にConnectしてください");
@@ -1282,6 +1534,7 @@ assistBtn.addEventListener('click', async () => {
 
 resetCubeStateBtn.addEventListener('click', async () => {
     try {
+        replayToken++;
         if (!cubeConnection) throw new Error("先にConnectしてください");
         const ok = confirm("物理キューブが6面完成している時だけ実行してください。\n現在の状態をデバイス内部の完成状態として同期しますか？");
         if (!ok) return;
@@ -1301,6 +1554,9 @@ resetCubeStateBtn.addEventListener('click', async () => {
 });
 
 resetBtn.addEventListener('click', () => {
+    replayToken++;
+    activeReplayIndex = null;
+    showMainPage('timer');
     appState = 'IDLE';
     stopActiveTimers();
     resetTimerDisplay();
@@ -1310,6 +1566,7 @@ resetBtn.addEventListener('click', () => {
     assistSequence = [];
     assistMistakeStack = [];
     assistFaceletsSyncPending = false;
+    currentSolveMoves = [];
 
     resetVisualizerAlg();
     scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
@@ -1323,10 +1580,21 @@ clearSessionBtn.addEventListener('click', () => {
     }
 });
 
+clearSolveLogsBtn.addEventListener('click', () => {
+    if (confirm("ソルブログをすべて削除しますか？")) {
+        replayToken++;
+        activeReplayIndex = null;
+        solveLogs = [];
+        saveSolveLogs();
+        renderSolveLogs();
+    }
+});
+
 function applyPenalty(pen) {
     if (solveTimes.length === 0 || appState !== 'IDLE') return;
     solveTimes[solveTimes.length - 1].penalty = pen;
     timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);
+    updateLatestSolveLogPenalty(pen);
     updateStats();
 }
 btnOk.addEventListener('click', () => applyPenalty(''));
@@ -1456,6 +1724,7 @@ connectBtn.addEventListener('click', async () => {
                         stopActiveTimers();
                         const elapsed = (now - inspectStartTime) / 1000;
                         currentSolvePenalty = (elapsed > 17) ? 'DNF' : (elapsed > 15) ? '+2' : '';
+                        currentSolveMoves = [];
 
                         appState = 'SOLVING';
                         startTime = now;
@@ -1506,10 +1775,20 @@ connectBtn.addEventListener('click', async () => {
                     const solved = checkIsSolved(cleanStr);
 
                     if (solved) {
+                        clearPendingVisualMove(true);
                         appState = 'IDLE';
 
                         const finalMs = Date.now() - startTime;
-                        solveTimes.push({ timeMs: finalMs, penalty: currentSolvePenalty, date: Date.now() });
+                        const solvedAt = Date.now();
+                        solveTimes.push({ timeMs: finalMs, penalty: currentSolvePenalty, date: solvedAt });
+                        addSolveLog({
+                            version: 2,
+                            date: solvedAt,
+                            timeMs: finalMs,
+                            penalty: currentSolvePenalty,
+                            scramble: currentSolveScramble.slice(),
+                            moves: currentSolveMoves.slice()
+                        });
 
                         timerDisplay.style.color = currentSolvePenalty === 'DNF' ? "#e74c3c" : "#0fdb92";
                         timerDisplay.textContent = formatDisplay(solveTimes[solveTimes.length - 1]);

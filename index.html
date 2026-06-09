@@ -25,26 +25,54 @@
     </section>
 
     <section class="timer-card">
-        <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
-
-        <div class="timer-container" id="timerArea">
-            <div id="timerDisplay">0.00</div>
-            <div id="timerSubtext"></div>
+        <div class="page-tabs" role="tablist" aria-label="表示切替">
+            <button class="page-tab active" id="timerPageBtn" type="button">タイマー</button>
+            <button class="page-tab" id="logPageBtn" type="button">ログ</button>
         </div>
 
-        <div class="penalty-group" id="penaltyGroup">
-            <button class="pen-btn ok-active" id="btnOk" type="button">OK</button>
-            <button class="pen-btn" id="btnPlus2" type="button">+2</button>
-            <button class="pen-btn" id="btnDnf" type="button">DNF</button>
+        <div class="timer-page active" id="timerPage">
+            <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
+
+            <div class="timer-container" id="timerArea">
+                <div id="timerDisplay">0.00</div>
+                <div id="timerSubtext"></div>
+            </div>
+
+            <div class="penalty-group" id="penaltyGroup">
+                <button class="pen-btn ok-active" id="btnOk" type="button">OK</button>
+                <button class="pen-btn" id="btnPlus2" type="button">+2</button>
+                <button class="pen-btn" id="btnDnf" type="button">DNF</button>
+            </div>
+
+            <div class="stats-strip">
+                <div class="stat-box"><span id="statPb">--</span><div class="stat-label">PB</div></div>
+                <div class="stat-box"><span id="statAo5">--</span><div class="stat-label">Ao5</div></div>
+                <div class="stat-box"><span id="statAo12">--</span><div class="stat-label">Ao12</div></div>
+                <div class="stat-box"><span id="statCount">0</span><div class="stat-label">Solves</div></div>
+                <div class="stat-box stat-secondary"><span id="statBest">--</span><div class="stat-label">Best</div></div>
+                <div class="stat-box stat-secondary"><span id="statWorst">--</span><div class="stat-label">Worst</div></div>
+            </div>
         </div>
 
-        <div class="stats-strip">
-            <div class="stat-box"><span id="statPb">--</span><div class="stat-label">PB</div></div>
-            <div class="stat-box"><span id="statAo5">--</span><div class="stat-label">Ao5</div></div>
-            <div class="stat-box"><span id="statAo12">--</span><div class="stat-label">Ao12</div></div>
-            <div class="stat-box"><span id="statCount">0</span><div class="stat-label">Solves</div></div>
-            <div class="stat-box stat-secondary"><span id="statBest">--</span><div class="stat-label">Best</div></div>
-            <div class="stat-box stat-secondary"><span id="statWorst">--</span><div class="stat-label">Worst</div></div>
+        <div class="log-page" id="logPage">
+            <div class="solve-log-panel">
+                <div class="solve-log-header">
+                    <span>直近10回のソルブログ</span>
+                    <select class="replay-speed-select" id="replaySpeedSelect" aria-label="再生速度">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                        <option value="4">4x</option>
+                    </select>
+                    <button class="mini-btn" id="clearSolveLogsBtn" type="button">クリア</button>
+                </div>
+                <div class="replay-seek-row">
+                    <input id="replaySeekBar" class="replay-seek" type="range" min="0" max="0" value="0" step="10" disabled>
+                    <span id="replaySeekTime" class="replay-time">0.00 / 0.00</span>
+                </div>
+                <div id="solveLogList" class="solve-log-list"></div>
+            </div>
         </div>
     </section>
 
