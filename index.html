@@ -26,8 +26,8 @@
 
     <section class="timer-card">
         <div class="page-tabs" role="tablist" aria-label="表示切替">
-            <button class="page-tab active" id="timerPageBtn" type="button">タイマー</button>
-            <button class="page-tab" id="logPageBtn" type="button">ログ</button>
+            <button class="page-tab active" id="timerPageBtn" type="button" aria-pressed="true">タイマー</button>
+            <button class="page-tab" id="logPageBtn" type="button" aria-pressed="false">ログ</button>
         </div>
 
         <div class="timer-page active" id="timerPage">
@@ -54,7 +54,7 @@
             </div>
         </div>
 
-        <div class="log-page" id="logPage">
+        <div class="log-page" id="logPage" hidden>
             <div class="solve-log-panel">
                 <div class="solve-log-header">
                     <span>直近10回のソルブログ</span>

@@ -218,6 +218,7 @@ class CustomCubeViewer {
 
         this.container.addEventListener('pointerdown', (ev) => {
             if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+            ev.preventDefault();
             this.drag = {
                 pointerId: ev.pointerId,
                 x: ev.clientX,
@@ -228,6 +229,7 @@ class CustomCubeViewer {
 
         this.container.addEventListener('pointermove', (ev) => {
             if (!this.drag || ev.pointerId !== this.drag.pointerId) return;
+            ev.preventDefault();
             const dx = ev.clientX - this.drag.x;
             const dy = ev.clientY - this.drag.y;
             const yawSign = this.isUpsideDown() ? -1 : 1;
@@ -643,6 +645,10 @@ function showMainPage(page) {
     logPage?.classList.toggle('active', showLog);
     timerPageBtn?.classList.toggle('active', !showLog);
     logPageBtn?.classList.toggle('active', showLog);
+    if (timerPage) timerPage.hidden = showLog;
+    if (logPage) logPage.hidden = !showLog;
+    timerPageBtn?.setAttribute('aria-pressed', showLog ? 'false' : 'true');
+    logPageBtn?.setAttribute('aria-pressed', showLog ? 'true' : 'false');
 }
 
 timerPageBtn?.addEventListener('click', () => showMainPage('timer'));
