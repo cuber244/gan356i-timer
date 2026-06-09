@@ -11,11 +11,34 @@ const STORAGE_UU_SHORTCUT = 'ganTimerUuShortcutEnabled';
 const STORAGE_CUBE_MAC = 'ganTimerCubeMacAddress';
 const IDLE_SCRAMBLE_TEXT = 'Push "Generate Scramble" or [ U U\' ]';
 const SOLVED_FACELETS = "UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB";
+const FACELET_FACE_ORDER = ['U', 'R', 'F', 'D', 'L', 'B'];
+const FACELET_COLORS = {
+    U: 0xf8fafc,
+    D: 0xfacc15,
+    R: 0xef4444,
+    L: 0xf97316,
+    F: 0x22c55e,
+    B: 0x3b82f6
+};
 const NORMAL_TEMPO_SCALE = 2;
 const ASSIST_PREVIEW_TEMPO_SCALE = 1;
 const ASSIST_PREVIEW_MOVE_MS = 950;
 const ASSIST_PREVIEW_PAUSE_AFTER_MOVE_MS = 220;
-const ASSIST_PREVIEW_PAUSE_AFTER_RESET_MS = 260;
+const ASSIST_PREVIEW_PAUSE_AFTER_RESET_MS = 620;
+const SHORT_SOLVE_MAX_DEPTH = 6;
+const SHORT_SOLVE_TIME_LIMIT_MS = 450;
+const SLICE_MOVE_PAIR_WINDOW_MS = 180;
+const THREE_MODULE_URL = 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+const SOLVER_MOVES = [
+    'U', "U'", 'U2',
+    'R', "R'", 'R2',
+    'F', "F'", 'F2',
+    'D', "D'", 'D2',
+    'L', "L'", 'L2',
+    'B', "B'", 'B2'
+];
+const OPPOSITE_FACE = { U: 'D', D: 'U', R: 'L', L: 'R', F: 'B', B: 'F' };
+const FACE_ORDER = { U: 0, D: 1, R: 2, L: 3, F: 4, B: 5 };
 
 const librariesReady = loadLibraries();
 
@@ -67,7 +90,8 @@ const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
 const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'),
       scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
-      penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput');
+      penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput'),
+      cameraResetBtn = getEl('cameraResetBtn');
 const stats = {
     pb: getEl('statPb'),
     ao5: getEl('statAo5'),
@@ -76,8 +100,466 @@ const stats = {
     worst: getEl('statWorst'),
     count: getEl('statCount')
 };
-twistyElement.setAttribute('camera-latitude-limits', '180');
-twistyElement.cameraLatitudeLimits = 180;
+
+let customViewer = null;
+let visualizerReady = Promise.resolve();
+
+class CustomCubeViewer {
+    constructor(container, THREE) {
+        this.container = container;
+        this.THREE = THREE;
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+        this.camera.position.set(0, 0, 8.5);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+        this.renderer.setClearColor(0x000000, 0);
+        this.container.replaceChildren(this.renderer.domElement);
+
+        this.cubeGroup = new THREE.Group();
+        this.defaultRotation = { x: -1.2 + Math.PI / 2, y: 1 + Math.PI * 1.5, z: 0 };
+        this.resetCamera();
+        this.scene.add(this.cubeGroup);
+
+        this.cubies = [];
+        this.tempoScale = NORMAL_TEMPO_SCALE;
+        this.animationHandle = null;
+        this.activeMove = null;
+        this.drag = null;
+
+        this.createLights();
+        this.createCube();
+        this.bindEvents();
+        this.resize();
+        this.render();
+    }
+
+    createLights() {
+        const { AmbientLight, DirectionalLight } = this.THREE;
+        this.scene.add(new AmbientLight(0xffffff, 1.8));
+        const key = new DirectionalLight(0xffffff, 2.4);
+        key.position.set(4, 6, 5);
+        this.scene.add(key);
+        const fill = new DirectionalLight(0xffffff, 1.1);
+        fill.position.set(-5, -3, 4);
+        this.scene.add(fill);
+    }
+
+    createCube() {
+        const { BoxGeometry, Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PlaneGeometry } = this.THREE;
+        const bodyGeometry = new BoxGeometry(0.96, 0.96, 0.96);
+        const stickerGeometry = new PlaneGeometry(0.84, 0.84);
+        const bodyMaterial = new MeshStandardMaterial({ color: 0x111827, roughness: 0.55, metalness: 0.02 });
+        const stickerMaterialOptions = color => ({
+            color,
+            side: this.THREE.DoubleSide
+        });
+        const stickerMaterials = {
+            U: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.U)),
+            D: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.D)),
+            R: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.R)),
+            L: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.L)),
+            F: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.F)),
+            B: new MeshBasicMaterial(stickerMaterialOptions(FACELET_COLORS.B))
+        };
+
+        for (let x = -1; x <= 1; x++) {
+            for (let y = -1; y <= 1; y++) {
+                for (let z = -1; z <= 1; z++) {
+                    const cubie = new Group();
+                    cubie.position.set(x, y, z);
+                    cubie.add(new Mesh(bodyGeometry, bodyMaterial));
+
+                    if (y === 1) this.addSticker(cubie, stickerGeometry, stickerMaterials.U, 'U', [0, 0.501, 0], [-Math.PI / 2, 0, 0]);
+                    if (y === -1) this.addSticker(cubie, stickerGeometry, stickerMaterials.D, 'D', [0, -0.501, 0], [Math.PI / 2, 0, 0]);
+                    if (x === 1) this.addSticker(cubie, stickerGeometry, stickerMaterials.R, 'R', [0.501, 0, 0], [0, Math.PI / 2, 0]);
+                    if (x === -1) this.addSticker(cubie, stickerGeometry, stickerMaterials.L, 'L', [-0.501, 0, 0], [0, -Math.PI / 2, 0]);
+                    if (z === 1) this.addSticker(cubie, stickerGeometry, stickerMaterials.F, 'F', [0, 0, 0.501], [0, 0, 0]);
+                    if (z === -1) this.addSticker(cubie, stickerGeometry, stickerMaterials.B, 'B', [0, 0, -0.501], [0, Math.PI, 0]);
+
+                    this.cubeGroup.add(cubie);
+                    this.cubies.push({ object: cubie, coord: { x, y, z } });
+                }
+            }
+        }
+    }
+
+    addSticker(cubie, geometry, material, face, position, rotation) {
+        const sticker = new this.THREE.Mesh(geometry, material.clone());
+        sticker.position.set(...position);
+        sticker.rotation.set(...rotation);
+        sticker.userData.face = face;
+        sticker.userData.coord = {
+            x: Math.round(cubie.position.x),
+            y: Math.round(cubie.position.y),
+            z: Math.round(cubie.position.z)
+        };
+        sticker.userData.isCenter = this.isCenterSticker(face, cubie.position);
+        cubie.add(sticker);
+    }
+
+    isCenterSticker(face, position) {
+        const x = Math.round(position.x);
+        const y = Math.round(position.y);
+        const z = Math.round(position.z);
+        if (face === 'U' || face === 'D') return x === 0 && z === 0;
+        if (face === 'R' || face === 'L') return y === 0 && z === 0;
+        return x === 0 && y === 0;
+    }
+
+    bindEvents() {
+        this.resizeObserver = new ResizeObserver(() => this.resize());
+        this.resizeObserver.observe(this.container);
+
+        this.container.addEventListener('pointerdown', (ev) => {
+            if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+            this.drag = {
+                pointerId: ev.pointerId,
+                x: ev.clientX,
+                y: ev.clientY
+            };
+            this.container.setPointerCapture?.(ev.pointerId);
+        });
+
+        this.container.addEventListener('pointermove', (ev) => {
+            if (!this.drag || ev.pointerId !== this.drag.pointerId) return;
+            const dx = ev.clientX - this.drag.x;
+            const dy = ev.clientY - this.drag.y;
+            const yawSign = this.isUpsideDown() ? -1 : 1;
+            this.cubeGroup.rotateY(dx * 0.01 * yawSign);
+            this.cubeGroup.rotateOnWorldAxis(new this.THREE.Vector3(1, 0, 0), dy * 0.01);
+            this.drag.x = ev.clientX;
+            this.drag.y = ev.clientY;
+            this.render();
+        });
+
+        const stopDrag = (ev) => {
+            if (!this.drag || ev.pointerId !== this.drag.pointerId) return;
+            this.container.releasePointerCapture?.(ev.pointerId);
+            this.drag = null;
+        };
+        this.container.addEventListener('pointerup', stopDrag);
+        this.container.addEventListener('pointercancel', stopDrag);
+    }
+
+    resize() {
+        const rect = this.container.getBoundingClientRect();
+        const width = Math.max(1, rect.width);
+        const height = Math.max(1, rect.height);
+        this.camera.aspect = width / height;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(width, height, false);
+        this.render();
+    }
+
+    render() {
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    setTempoScale(scale) {
+        this.tempoScale = scale;
+    }
+
+    setAlg(alg) {
+        this.stopActiveMove();
+        this.cubeGroup.clear();
+        this.cubies = [];
+        this.createCube();
+        splitAlg(alg).forEach(move => this.applyMoveInstant(move));
+        this.render();
+    }
+
+    setFacelets(facelets) {
+        const clean = cleanFacelets(facelets);
+        if (clean.length !== 54) return;
+
+        this.stopActiveMove();
+        this.cubeGroup.clear();
+        this.cubies = [];
+        this.createCube();
+
+        this.cubeGroup.traverse(object => {
+            const { face, coord } = object.userData || {};
+            if (!face || !coord || !object.material?.color) return;
+
+            const index = this.getFaceletIndex(face, coord);
+            const colorFace = clean[index];
+            object.material.color.setHex(FACELET_COLORS[colorFace] ?? 0x6b7280);
+        });
+
+        this.render();
+    }
+
+    getFaceletIndex(face, coord) {
+        const faceOffset = FACELET_FACE_ORDER.indexOf(face) * 9;
+        const indexInFace = this.getFaceletIndexInFace(face, coord);
+        return faceOffset + indexInFace;
+    }
+
+    getFaceletIndexInFace(face, { x, y, z }) {
+        if (face === 'U') return (z + 1) * 3 + (x + 1);
+        if (face === 'R') return (1 - y) * 3 + (1 - z);
+        if (face === 'F') return (1 - y) * 3 + (x + 1);
+        if (face === 'D') return (1 - z) * 3 + (x + 1);
+        if (face === 'L') return (1 - y) * 3 + (z + 1);
+        return (1 - y) * 3 + (1 - x);
+    }
+
+    addMove(move, animate = true) {
+        if (!move) return Promise.resolve();
+        return animate ? this.animateMove(move) : Promise.resolve(this.applyMoveInstant(move));
+    }
+
+    flipVertical(flipped) {
+        this.cubeGroup.rotation.x += Math.PI;
+        this.render();
+    }
+
+    resetCamera() {
+        this.cubeGroup.rotation.set(this.defaultRotation.x, this.defaultRotation.y, this.defaultRotation.z);
+        this.render?.();
+    }
+
+    isUpsideDown() {
+        const up = new this.THREE.Vector3(0, 1, 0).applyQuaternion(this.cubeGroup.quaternion);
+        return up.y < 0;
+    }
+
+    normalizeCenterOrientation() {
+        this.stopActiveMove();
+        const whiteUp = this.getCenterStickerDirection('U');
+        const greenFront = this.getCenterStickerDirection('F');
+        if (!whiteUp || !greenFront) return null;
+
+        const localUp = whiteUp.normalize();
+        const localFront = greenFront
+            .sub(localUp.clone().multiplyScalar(greenFront.dot(localUp)))
+            .normalize();
+        if (localFront.lengthSq() < 0.5) return null;
+
+        const localRight = localUp.clone().cross(localFront).normalize();
+        const targetUp = new this.THREE.Vector3(0, 1, 0);
+        const targetFront = new this.THREE.Vector3(0, 0, 1);
+        const targetRight = targetUp.clone().cross(targetFront).normalize();
+        const localBasis = new this.THREE.Matrix4().makeBasis(localRight, localUp, localFront);
+        const targetBasis = new this.THREE.Matrix4().makeBasis(targetRight, targetUp, targetFront);
+        const rotationMatrix = targetBasis.multiply(localBasis.invert());
+        const rotation = new this.THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+
+        this.cubies.forEach(cubie => {
+            cubie.object.position.applyQuaternion(rotation);
+            cubie.object.quaternion.premultiply(rotation);
+            this.snapCubieToGrid(cubie);
+        });
+        this.render();
+    }
+
+    getCenterStickerDirection(face) {
+        const sticker = this.findCenterSticker(face);
+        if (!sticker?.parent) return null;
+
+        this.cubeGroup.updateMatrixWorld(true);
+        const stickerPosition = new this.THREE.Vector3();
+        const cubiePosition = new this.THREE.Vector3();
+        sticker.getWorldPosition(stickerPosition);
+        sticker.parent.getWorldPosition(cubiePosition);
+
+        const cubeQuaternion = this.cubeGroup.getWorldQuaternion(new this.THREE.Quaternion());
+        return stickerPosition
+            .sub(cubiePosition)
+            .applyQuaternion(cubeQuaternion.invert())
+            .normalize();
+    }
+
+    findCenterSticker(face) {
+        let result = null;
+        this.cubeGroup.traverse(object => {
+            if (!result && object.userData?.face === face && object.userData?.isCenter) {
+                result = object;
+            }
+        });
+        return result;
+    }
+
+    stopActiveMove() {
+        if (this.animationHandle) {
+            cancelAnimationFrame(this.animationHandle);
+            this.animationHandle = null;
+        }
+        this.completeActiveMove();
+    }
+
+    completeActiveMove() {
+        const active = this.activeMove;
+        if (!active) return;
+
+        const remainingAngle = active.spec.angle - active.previousAngle;
+        active.pivot.rotation[active.spec.axis] += remainingAngle;
+        active.pivot.updateMatrixWorld(true);
+        this.cubeGroup.updateMatrixWorld(true);
+
+        active.selected.forEach(cubie => {
+            this.cubeGroup.attach(cubie.object);
+            this.snapCubieToGrid(cubie);
+        });
+        this.cubeGroup.remove(active.pivot);
+        this.activeMove = null;
+        this.animationHandle = null;
+        this.render();
+        active.resolve?.();
+    }
+
+    getMoveSpec(move) {
+        const face = move[0];
+        const turns = move.endsWith('2') ? 2 : 1;
+        const prime = move.endsWith("'");
+        const specs = {
+            U: { axis: 'y', layer: 1, sign: -1 },
+            D: { axis: 'y', layer: -1, sign: 1 },
+            R: { axis: 'x', layer: 1, sign: -1 },
+            L: { axis: 'x', layer: -1, sign: 1 },
+            F: { axis: 'z', layer: 1, sign: -1 },
+            B: { axis: 'z', layer: -1, sign: 1 },
+            M: { axis: 'x', layer: 0, sign: 1 },
+            E: { axis: 'y', layer: 0, sign: -1 },
+            S: { axis: 'z', layer: 0, sign: 1 }
+        };
+        const spec = specs[face];
+        return { ...spec, angle: spec.sign * (prime ? -1 : 1) * turns * Math.PI / 2 };
+    }
+
+    selectedCubies(spec) {
+        return this.cubies.filter(cubie => this.getCubieLayer(cubie, spec.axis) === spec.layer);
+    }
+
+    getCubieLayer(cubie, axis) {
+        return Math.round(cubie.object.position[axis]);
+    }
+
+    syncCubieCoord(cubie) {
+        cubie.coord = {
+            x: Math.round(cubie.object.position.x),
+            y: Math.round(cubie.object.position.y),
+            z: Math.round(cubie.object.position.z)
+        };
+    }
+
+    snapCubieToGrid(cubie) {
+        cubie.object.updateMatrixWorld(true);
+        cubie.object.position.set(
+            Math.round(cubie.object.position.x),
+            Math.round(cubie.object.position.y),
+            Math.round(cubie.object.position.z)
+        );
+        this.snapCubieQuaternion(cubie.object);
+        cubie.object.updateMatrix();
+        cubie.object.updateMatrixWorld(true);
+        this.syncCubieCoord(cubie);
+    }
+
+    snapCubieQuaternion(object) {
+        const matrix = new this.THREE.Matrix4().makeRotationFromQuaternion(object.quaternion);
+        const basis = [
+            new this.THREE.Vector3().setFromMatrixColumn(matrix, 0),
+            new this.THREE.Vector3().setFromMatrixColumn(matrix, 1),
+            new this.THREE.Vector3().setFromMatrixColumn(matrix, 2)
+        ];
+        const snapped = basis.map(vector => this.snapBasisVector(vector));
+        const handedness = snapped[0].clone().cross(snapped[1]).dot(snapped[2]);
+        if (handedness < 0) snapped[2].multiplyScalar(-1);
+        const snappedMatrix = new this.THREE.Matrix4().makeBasis(snapped[0], snapped[1], snapped[2]);
+        object.quaternion.setFromRotationMatrix(snappedMatrix);
+    }
+
+    snapBasisVector(vector) {
+        const axis = new this.THREE.Vector3();
+        const abs = [Math.abs(vector.x), Math.abs(vector.y), Math.abs(vector.z)];
+        const maxIndex = abs.indexOf(Math.max(...abs));
+        const sign = vector.getComponent(maxIndex) >= 0 ? 1 : -1;
+        axis.setComponent(maxIndex, sign);
+        return axis;
+    }
+
+    applyMoveInstant(move) {
+        const spec = this.getMoveSpec(move);
+        const selected = this.selectedCubies(spec);
+        const axisVector = this.axisVector(spec.axis);
+        const rotation = new this.THREE.Quaternion().setFromAxisAngle(axisVector, spec.angle);
+        selected.forEach(cubie => {
+            cubie.object.position.applyAxisAngle(axisVector, spec.angle);
+            cubie.object.quaternion.premultiply(rotation);
+            this.snapCubieToGrid(cubie);
+        });
+        this.render();
+    }
+
+    animateMove(move) {
+        this.stopActiveMove();
+        const spec = this.getMoveSpec(move);
+        const selected = this.selectedCubies(spec);
+        const pivot = new this.THREE.Group();
+        this.cubeGroup.add(pivot);
+        selected.forEach(cubie => pivot.attach(cubie.object));
+
+        const duration = Math.max(120, 380 / this.tempoScale);
+        const startedAt = performance.now();
+
+        return new Promise(resolve => {
+            this.activeMove = {
+                pivot,
+                selected,
+                spec,
+                previousAngle: 0,
+                resolve
+            };
+
+            const step = (now) => {
+                if (!this.activeMove || this.activeMove.pivot !== pivot) return;
+
+                const t = Math.min(1, (now - startedAt) / duration);
+                const eased = 1 - Math.pow(1 - t, 3);
+                const targetAngle = spec.angle * eased;
+                pivot.rotation[spec.axis] += targetAngle - this.activeMove.previousAngle;
+                this.activeMove.previousAngle = targetAngle;
+                this.render();
+
+                if (t < 1) {
+                    this.animationHandle = requestAnimationFrame(step);
+                    return;
+                }
+
+                this.completeActiveMove();
+            };
+
+            this.animationHandle = requestAnimationFrame(step);
+        });
+    }
+
+    axisVector(axis) {
+        if (axis === 'x') return new this.THREE.Vector3(1, 0, 0);
+        if (axis === 'y') return new this.THREE.Vector3(0, 1, 0);
+        return new this.THREE.Vector3(0, 0, 1);
+    }
+
+    rotateCoord(coord, axis, angle) {
+        const vector = new this.THREE.Vector3(coord.x, coord.y, coord.z);
+        vector.applyAxisAngle(this.axisVector(axis), angle);
+        return {
+            x: Math.round(vector.x),
+            y: Math.round(vector.y),
+            z: Math.round(vector.z)
+        };
+    }
+}
+
+async function initCustomVisualizer() {
+    const THREE = await import(THREE_MODULE_URL);
+    customViewer = new CustomCubeViewer(twistyElement, THREE);
+}
+
+visualizerReady = initCustomVisualizer().catch(e => {
+    console.warn("Custom visualizer failed to load", e);
+});
 
 // --- State Variables ---
 let cubeConnection = null;
@@ -101,7 +583,12 @@ let assistPreviewMove = null;
 let assistPreviewReverseTimer = null;
 let assistPreviewLoopTimer = null;
 let assistPreviewBaseAlg = "";
+let assistPreviewBaseFacelets = null;
 let visualizerAlg = "";
+let pendingVisualMove = null;
+let reportedFaceToWorldFace = createIdentityFaceMap();
+let latestFacelets = null;
+let assistFaceletsSyncPending = false;
 
 uuShortcutToggle.checked = uuShortcutEnabled;
 uuShortcutToggle.addEventListener('change', () => {
@@ -139,6 +626,10 @@ settingsModal.addEventListener('click', (ev) => {
     if (ev.target === settingsModal) closeSettings();
 });
 
+cameraResetBtn.addEventListener('click', () => {
+    customViewer?.resetCamera();
+});
+
 // --- Format & Stats Logic ---
 function formatTime(ms) { return (ms / 1000).toFixed(2); }
 
@@ -172,23 +663,29 @@ function hideMoveGuide() {
 }
 
 function updateMoveGuide(move) {
+    if (appState === 'ASSISTING' && assistFaceletsSyncPending) {
+        stopAssistPreview(false);
+        return;
+    }
     startAssistPreview(move);
 }
 
 function startAssistPreview(move) {
     if (assistPreviewMove === move && assistPreviewLoopTimer) return;
     stopAssistPreview(true);
+    clearPendingVisualMove(true);
     if (!move) return;
 
     assistPreviewMove = move;
     assistPreviewBaseAlg = visualizerAlg;
+    assistPreviewBaseFacelets = appState === 'ASSISTING' ? latestFacelets : null;
 
     const playOnce = () => {
         if (assistPreviewMove !== move) return;
 
         restoreAssistPreviewBase();
         setTwistyTempo(ASSIST_PREVIEW_TEMPO_SCALE);
-        twistyElement.experimentalAddMove(move);
+        customViewer?.addMove(move);
 
         assistPreviewReverseTimer = setTimeout(() => {
             setTwistyTempo(NORMAL_TEMPO_SCALE);
@@ -213,28 +710,191 @@ function stopAssistPreview(restoreVisualState = true) {
 
     assistPreviewMove = null;
     assistPreviewBaseAlg = "";
+    assistPreviewBaseFacelets = null;
 }
 
 function restoreAssistPreviewBase() {
-    twistyElement.alg = assistPreviewBaseAlg;
+    clearPendingVisualMove(false);
+    if (assistPreviewBaseFacelets) {
+        customViewer?.setFacelets(assistPreviewBaseFacelets);
+    } else {
+        customViewer?.setAlg(assistPreviewBaseAlg);
+    }
+    normalizeAssistVisualizerOrientation();
 }
 
 function setTwistyTempo(scale) {
-    twistyElement.tempoScale = scale;
-    twistyElement.setAttribute('tempo-scale', String(scale));
+    customViewer?.setTempoScale(scale);
+}
+
+function createIdentityFaceMap() {
+    return { U: 'U', D: 'D', R: 'R', L: 'L', F: 'F', B: 'B' };
+}
+
+function getMoveSuffix(move) {
+    return move.endsWith("2") ? "2" : (move.endsWith("'") ? "'" : "");
+}
+
+function normalizeReportedMoveForVisualizer(move) {
+    if (!move) return move;
+    const face = move[0];
+    return (reportedFaceToWorldFace[face] || face) + getMoveSuffix(move);
+}
+
+function faceToCoord(face) {
+    const coords = {
+        U: { x: 0, y: 1, z: 0 },
+        D: { x: 0, y: -1, z: 0 },
+        R: { x: 1, y: 0, z: 0 },
+        L: { x: -1, y: 0, z: 0 },
+        F: { x: 0, y: 0, z: 1 },
+        B: { x: 0, y: 0, z: -1 }
+    };
+    return coords[face];
+}
+
+function coordToFace(coord) {
+    const key = `${coord.x},${coord.y},${coord.z}`;
+    const faces = {
+        "0,1,0": "U",
+        "0,-1,0": "D",
+        "1,0,0": "R",
+        "-1,0,0": "L",
+        "0,0,1": "F",
+        "0,0,-1": "B"
+    };
+    return faces[key];
+}
+
+function rotateFaceCoord(coord, axis, angle) {
+    const quarterTurns = ((Math.round(angle / (Math.PI / 2)) % 4) + 4) % 4;
+    let rotated = { ...coord };
+
+    for (let i = 0; i < quarterTurns; i++) {
+        const { x, y, z } = rotated;
+        if (axis === 'x') rotated = { x, y: -z, z: y };
+        else if (axis === 'y') rotated = { x: z, y, z: -x };
+        else rotated = { x: -y, y: x, z };
+    }
+
+    return rotated;
+}
+
+function applySliceFaceMap(sliceMove) {
+    const face = sliceMove[0];
+    if (!['M', 'E', 'S'].includes(face)) return;
+
+    const axis = face === 'M' ? 'x' : (face === 'E' ? 'y' : 'z');
+    const baseSign = face === 'M' ? 1 : (face === 'E' ? -1 : 1);
+    const turns = sliceMove.endsWith('2') ? 2 : 1;
+    const prime = sliceMove.endsWith("'");
+    const angle = baseSign * (prime ? -1 : 1) * turns * Math.PI / 2;
+    const nextMap = {};
+
+    Object.entries(reportedFaceToWorldFace).forEach(([reportedFace, worldFace]) => {
+        const coord = faceToCoord(worldFace);
+        nextMap[reportedFace] = coord[axis] === 0
+            ? coordToFace(rotateFaceCoord(coord, axis, angle))
+            : worldFace;
+    });
+
+    reportedFaceToWorldFace = nextMap;
+}
+
+function clearPendingVisualMove(flush = true) {
+    if (!pendingVisualMove) return;
+    clearTimeout(pendingVisualMove.timer);
+    const move = pendingVisualMove.move;
+    pendingVisualMove = null;
+    if (flush) {
+        appendVisualizerMove(move);
+        customViewer?.addMove(move);
+    }
+}
+
+function appendVisualizerMove(move) {
+    visualizerAlg = [visualizerAlg, move].filter(Boolean).join(" ");
+}
+
+function getSliceMoveFromPair(firstMove, secondMove) {
+    const pair = `${firstMove} ${secondMove}`;
+    const slicePairs = {
+        "R L'": "M",
+        "L' R": "M",
+        "R' L": "M'",
+        "L R'": "M'",
+        "R2 L2": "M2",
+        "L2 R2": "M2",
+        "U D'": "E'",
+        "D' U": "E'",
+        "U' D": "E",
+        "D U'": "E",
+        "U2 D2": "E2",
+        "D2 U2": "E2",
+        "F B'": "S",
+        "B' F": "S",
+        "F' B": "S'",
+        "B F'": "S'",
+        "F2 B2": "S2",
+        "B2 F2": "S2"
+    };
+    return slicePairs[pair] || null;
+}
+
+function queueVisualMove(move) {
+    if (!move) return;
+    const normalizedMove = normalizeReportedMoveForVisualizer(move);
+
+    if (pendingVisualMove) {
+        const sliceMove = getSliceMoveFromPair(pendingVisualMove.move, normalizedMove);
+        if (sliceMove) {
+            clearTimeout(pendingVisualMove.timer);
+            pendingVisualMove = null;
+            appendVisualizerMove(sliceMove);
+            applySliceFaceMap(sliceMove);
+            customViewer?.addMove(sliceMove);
+            return;
+        }
+
+        clearPendingVisualMove(true);
+    }
+
+    pendingVisualMove = {
+        move: normalizedMove,
+        timer: setTimeout(() => {
+            if (!pendingVisualMove || pendingVisualMove.move !== normalizedMove) return;
+            pendingVisualMove = null;
+            appendVisualizerMove(normalizedMove);
+            customViewer?.addMove(normalizedMove);
+        }, SLICE_MOVE_PAIR_WINDOW_MS)
+    };
 }
 
 function resetVisualizerAlg() {
     setTwistyTempo(NORMAL_TEMPO_SCALE);
+    clearPendingVisualMove(false);
+    reportedFaceToWorldFace = createIdentityFaceMap();
+    latestFacelets = null;
+    assistFaceletsSyncPending = false;
     visualizerAlg = "";
-    twistyElement.alg = "";
+    customViewer?.setAlg("");
+}
+
+function resetSliceMoveReference() {
+    clearPendingVisualMove(true);
+    reportedFaceToWorldFace = createIdentityFaceMap();
+}
+
+function normalizeAssistVisualizerOrientation() {
+    if (appState === 'ASSISTING') {
+        customViewer?.normalizeCenterOrientation();
+    }
 }
 
 function applyRealMoveToVisualizer(move, restorePreview = false) {
     if (restorePreview) stopAssistPreview(true);
     setTwistyTempo(NORMAL_TEMPO_SCALE);
-    visualizerAlg = [visualizerAlg, move].filter(Boolean).join(" ");
-    twistyElement.experimentalAddMove(move);
+    queueVisualMove(move);
 }
 
 function setBatteryLevel(level) {
@@ -293,7 +953,7 @@ function scheduleFaceletsRefresh() {
     clearTimeout(faceletsRefreshTimer);
     faceletsRefreshTimer = setTimeout(() => {
         requestCurrentFacelets().catch(e => console.warn("Facelets refresh failed", e));
-    }, 180);
+    }, 0);
 }
 
 function updateStats() {
@@ -373,6 +1033,68 @@ function splitAlg(alg) {
     return alg ? alg.trim().split(/\s+/).filter(Boolean) : [];
 }
 
+function shouldSkipSearchMove(previousMove, move) {
+    if (!previousMove) return false;
+
+    const previousFace = previousMove[0];
+    const face = move[0];
+    if (previousFace === face) return true;
+
+    return OPPOSITE_FACE[previousFace] === face && FACE_ORDER[previousFace] > FACE_ORDER[face];
+}
+
+function cloneCube(cube) {
+    return typeof cube.clone === 'function' ? cube.clone() : new Cube(cube);
+}
+
+function findShortSolution(cube, maxDepth = SHORT_SOLVE_MAX_DEPTH) {
+    if (cube.isSolved()) return [];
+
+    const startedAt = performance.now();
+    let timedOut = false;
+
+    function search(currentCube, depthRemaining, previousMove, path) {
+        if (currentCube.isSolved()) return path;
+        if (depthRemaining === 0) return null;
+        if (performance.now() - startedAt > SHORT_SOLVE_TIME_LIMIT_MS) {
+            timedOut = true;
+            return null;
+        }
+
+        for (const move of SOLVER_MOVES) {
+            if (shouldSkipSearchMove(previousMove, move)) continue;
+
+            const nextCube = cloneCube(currentCube);
+            nextCube.move(move);
+            const result = search(nextCube, depthRemaining - 1, move, path.concat(move));
+            if (result) return result;
+            if (timedOut) return null;
+        }
+
+        return null;
+    }
+
+    for (let depth = 1; depth <= maxDepth; depth++) {
+        const result = search(cube, depth, null, []);
+        if (result) return result;
+        if (timedOut) break;
+    }
+
+    return null;
+}
+
+function solveWithFallback(cube) {
+    const shortSolution = findShortSolution(cube);
+    if (shortSolution !== null) {
+        console.info(`Assist solver: short search (${shortSolution.length} moves)`);
+        return shortSolution;
+    }
+
+    const fallbackSolution = splitAlg(cube.solve());
+    console.info(`Assist solver: cubejs fallback (${fallbackSolution.length} moves)`);
+    return fallbackSolution;
+}
+
 function cleanFacelets(facelets) {
     return facelets.trim().toUpperCase().replace(/\s/g, '');
 }
@@ -382,7 +1104,7 @@ function solveFacelets(facelets) {
     const cleanStr = cleanFacelets(facelets);
     if (checkIsSolved(cleanStr)) return [];
     const cube = Cube.fromString(cleanStr);
-    return splitAlg(cube.solve());
+    return solveWithFallback(cube);
 }
 
 function generateScramble() {
@@ -460,6 +1182,9 @@ function renderAssistUI() {
 
 function startAssistFromFacelets(facelets) {
     try {
+        resetSliceMoveReference();
+        latestFacelets = cleanFacelets(facelets);
+        assistFaceletsSyncPending = false;
         assistSequence = solveFacelets(facelets);
         currentAssistStep = 0;
         assistMistakeStack = [];
@@ -477,6 +1202,8 @@ function startAssistFromFacelets(facelets) {
         stopActiveTimers();
         resetTimerDisplay();
         penaltyGroup.style.visibility = "hidden";
+        customViewer?.setFacelets(latestFacelets);
+        normalizeAssistVisualizerOrientation();
         renderAssistUI();
     } catch (e) {
         appState = 'IDLE';
@@ -582,6 +1309,7 @@ resetBtn.addEventListener('click', () => {
     assistMode = 'normal';
     assistSequence = [];
     assistMistakeStack = [];
+    assistFaceletsSyncPending = false;
 
     resetVisualizerAlg();
     scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
@@ -688,7 +1416,8 @@ connectBtn.addEventListener('click', async () => {
 
                 if (appState === 'ASSISTING') {
                     moveLog.textContent = ev.move;
-                    applyRealMoveToVisualizer(ev.move, true);
+                    assistFaceletsSyncPending = true;
+                    stopAssistPreview(false);
 
                     const expected = assistSequence[currentAssistStep];
 
@@ -707,6 +1436,7 @@ connectBtn.addEventListener('click', async () => {
                             appState = 'IDLE';
                             assistSequence = [];
                             assistMode = 'normal';
+                            assistFaceletsSyncPending = false;
                             hideMoveGuide();
                             scrambleDisplay.textContent = "完成手順が完了しました";
                             timerSubtext.textContent = "";
@@ -751,10 +1481,23 @@ connectBtn.addEventListener('click', async () => {
                 hideMoveGuide();
             } else if (ev.type === "FACELETS") {
                 showFaceletsLog(ev.facelets);
+                latestFacelets = cleanFacelets(ev.facelets);
 
                 if (assistFaceletsRequested) {
                     assistFaceletsRequested = false;
                     startAssistFromFacelets(ev.facelets);
+                    return;
+                }
+
+                if (appState === 'ASSISTING') {
+                    const shouldRefreshAssistPreview = assistFaceletsSyncPending;
+                    assistFaceletsSyncPending = false;
+                    if (shouldRefreshAssistPreview) {
+                        stopAssistPreview(false);
+                        customViewer?.setFacelets(latestFacelets);
+                        normalizeAssistVisualizerOrientation();
+                        renderAssistUI();
+                    }
                     return;
                 }
 

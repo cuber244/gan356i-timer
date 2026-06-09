@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GAN Cube Smart Timer Pro</title>
     <link rel="stylesheet" href="style.css">
-    <script type="module" src="https://cdn.cubing.net/js/cubing/twisty"></script>
 </head>
 <body>
 <main class="app-shell">
@@ -21,7 +20,8 @@
     </header>
 
     <section class="visualizer-area" aria-label="仮想キューブ">
-        <twisty-player id="cubeVisualizer" visualization="3D" control-panel="none" back-view="none" background="none" tempo-scale="2" camera-latitude-limits="180"></twisty-player>
+        <div id="cubeVisualizer" class="cube-visualizer"></div>
+        <button class="view-reset-btn" id="cameraResetBtn" type="button">視点リセット</button>
     </section>
 
     <section class="timer-card">

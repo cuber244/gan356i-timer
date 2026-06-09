@@ -125,11 +125,34 @@ button {
     border-radius: 8px;
     background: radial-gradient(circle at 50% 42%, #263241 0%, #131821 72%);
     overflow: hidden;
+    position: relative;
 }
 
-twisty-player {
+.cube-visualizer {
     width: 100%;
     height: 100%;
+}
+
+.cube-visualizer canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.view-reset-btn {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    min-height: 36px;
+    padding: 0 12px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 8px;
+    background: rgba(17, 24, 39, 0.82);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 800;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
 }
 
 .timer-card {
