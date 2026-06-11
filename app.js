@@ -105,8 +105,7 @@ const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext')
       solveLogList = getEl('solveLogList'), timerPage = getEl('timerPage'), logPage = getEl('logPage'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
       penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput'),
-      cameraResetBtn = getEl('cameraResetBtn'), focusModeBtn = getEl('focusModeBtn'),
-      zoomSlider = getEl('zoomSlider');
+      cameraResetBtn = getEl('cameraResetBtn'), focusModeBtn = getEl('focusModeBtn');
 const stats = {
     pb: getEl('statPb'),
     ao5: getEl('statAo5'),
@@ -131,7 +130,6 @@ class CustomCubeViewer {
         this.maxCameraDistance = 13;
         this.camera.position.set(0, 0, this.normalCameraDistance);
         this.assistViewActive = false;
-        this.onZoomChange = null;
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.setClearColor(0x000000, 0);
@@ -386,24 +384,7 @@ class CustomCubeViewer {
         );
         if (nextDistance === this.camera.position.z) return;
         this.camera.position.z = nextDistance;
-        this.notifyZoomChange();
         this.render();
-    }
-
-    setZoomPercent(percent) {
-        const normalized = Math.min(100, Math.max(0, percent)) / 100;
-        this.camera.position.z = this.maxCameraDistance -
-            normalized * (this.maxCameraDistance - this.minCameraDistance);
-        this.notifyZoomChange();
-        this.render();
-    }
-
-    notifyZoomChange() {
-        const range = this.maxCameraDistance - this.minCameraDistance;
-        const percent = range > 0
-            ? (this.maxCameraDistance - this.camera.position.z) / range * 100
-            : 0;
-        this.onZoomChange?.(Math.min(100, Math.max(0, percent)));
     }
 
     resize() {
@@ -541,7 +522,6 @@ class CustomCubeViewer {
     resetCamera() {
         this.camera.position.z = this.assistViewActive ? this.assistCameraDistance : this.normalCameraDistance;
         this.cubeGroup.rotation.set(this.defaultRotation.x, this.defaultRotation.y, this.defaultRotation.z);
-        this.notifyZoomChange();
         this.render?.();
     }
 
@@ -549,7 +529,6 @@ class CustomCubeViewer {
         this.assistViewActive = active;
         this.camera.position.z = active ? this.assistCameraDistance : this.normalCameraDistance;
         this.camera.updateProjectionMatrix();
-        this.notifyZoomChange();
         this.render();
     }
 
@@ -793,10 +772,6 @@ class CustomCubeViewer {
 async function initCustomVisualizer() {
     const THREE = await import(THREE_MODULE_URL);
     customViewer = new CustomCubeViewer(twistyElement, THREE);
-    customViewer.onZoomChange = value => {
-        if (zoomSlider) zoomSlider.value = String(Math.round(value));
-    };
-    customViewer.notifyZoomChange();
 }
 
 visualizerReady = initCustomVisualizer().catch(e => {
@@ -927,10 +902,6 @@ logPageBtn?.addEventListener('click', () => showMainPage('log'));
 
 cameraResetBtn.addEventListener('click', () => {
     customViewer?.resetCamera();
-});
-
-zoomSlider?.addEventListener('input', () => {
-    customViewer?.setZoomPercent(Number(zoomSlider.value));
 });
 
 focusModeBtn?.addEventListener('click', () => {
