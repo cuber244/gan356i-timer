@@ -246,6 +246,10 @@ class CustomCubeViewer {
         this.resizeObserver = new ResizeObserver(() => this.resize());
         this.resizeObserver.observe(this.container);
 
+        this.container.addEventListener('selectstart', ev => ev.preventDefault());
+        this.container.addEventListener('dragstart', ev => ev.preventDefault());
+        this.container.addEventListener('contextmenu', ev => ev.preventDefault());
+
         this.container.addEventListener('pointerdown', (ev) => {
             if (ev.pointerType === 'mouse' && ev.button !== 0) return;
             ev.preventDefault();
@@ -674,6 +678,8 @@ let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
 let assistSequence = [], currentAssistStep = 0, assistMistakeStack = [];
 let assistInstructionSegments = [];
 let assistTargetPartLabel = '';
+let assistTargetPartColors = null;
+let assistPersistentPartColors = [];
 let assistFaceletsRequested = false;
 let assistRequestType = 'normal';
 let assistMode = 'normal';
@@ -702,6 +708,7 @@ let assistPreviewRestartTimer = null;
 let assistInputRevision = 0;
 let assistPreviewBaseAlg = "";
 let assistPreviewBaseFacelets = null;
+let assistPreviewShowingMove = false;
 let visualizerAlg = "";
 let pendingVisualMove = null;
 let reportedFaceToWorldFace = createIdentityFaceMap();
@@ -827,6 +834,7 @@ function startAssistPreview(move) {
 
         restoreAssistPreviewBase();
         setTwistyTempo(ASSIST_PREVIEW_TEMPO_SCALE);
+        assistPreviewShowingMove = true;
         customViewer?.addMove(move);
 
         assistPreviewReverseTimer = setTimeout(() => {
@@ -855,9 +863,30 @@ function stopAssistPreview(restoreVisualState = true) {
     assistPreviewMove = null;
     assistPreviewBaseAlg = "";
     assistPreviewBaseFacelets = null;
+    assistPreviewShowingMove = false;
+}
+
+function commitMatchingAssistPreview(move) {
+    if (!assistPreviewShowingMove || assistPreviewMove !== move) return false;
+
+    clearTimeout(assistPreviewReverseTimer);
+    clearInterval(assistPreviewLoopTimer);
+    clearTimeout(assistPreviewRestartTimer);
+    assistPreviewReverseTimer = null;
+    assistPreviewLoopTimer = null;
+    assistPreviewRestartTimer = null;
+
+    customViewer?.stopActiveMove();
+    setTwistyTempo(NORMAL_TEMPO_SCALE);
+    assistPreviewMove = null;
+    assistPreviewBaseAlg = "";
+    assistPreviewBaseFacelets = null;
+    assistPreviewShowingMove = false;
+    return true;
 }
 
 function restoreAssistPreviewBase() {
+    assistPreviewShowingMove = false;
     clearPendingVisualMove(false);
     if (assistPreviewBaseFacelets) {
         customViewer?.setFacelets(assistPreviewBaseFacelets);
@@ -2106,19 +2135,17 @@ function getAssistTargetHighlightIndices(facelets, mode) {
     }
 
     if (mode === 'firstLayer') {
-        const targetIndex = getFirstUnsolvedCornerIndex(f);
-        if (targetIndex === -1) return [];
-        const corner = FIRST_LAYER_CORNERS[targetIndex];
-        const position = findCornerPosition(f, corner.colors);
-        return position ? CORNER_POSITIONS[position] : corner.stickers.map(([index]) => index);
+        const colors = assistTargetPartColors;
+        if (!colors) return [];
+        const position = findCornerPosition(f, colors);
+        return position ? CORNER_POSITIONS[position] : [];
     }
 
     if (mode === 'secondLayer') {
-        const targetIndex = getFirstUnsolvedSecondLayerEdgeIndex(f);
-        if (targetIndex === -1) return [];
-        const edge = SECOND_LAYER_EDGES[targetIndex];
-        const position = findEdgePosition(f, edge.colors);
-        return position ? EDGE_POSITIONS[position] : edge.stickers.map(([index]) => index);
+        const colors = assistTargetPartColors;
+        if (!colors) return [];
+        const position = findEdgePosition(f, colors);
+        return position ? EDGE_POSITIONS[position] : [];
     }
 
     if (mode === 'yellowCross') {
@@ -2181,6 +2208,26 @@ function addYellowLayerPieces(indices, facelets) {
     });
 }
 
+function addYellowStickerAtPosition(indices, facelets, position, positions) {
+    const stickerIndices = positions[position];
+    if (!stickerIndices) return;
+    const yellowStickerIndex = stickerIndices.find(index => facelets[index] === 'D');
+    if (yellowStickerIndex !== undefined) indices.add(yellowStickerIndex);
+}
+
+function addYellowEdgeStickers(indices, facelets) {
+    Object.keys(EDGE_POSITIONS).forEach(position => {
+        addYellowStickerAtPosition(indices, facelets, position, EDGE_POSITIONS);
+    });
+}
+
+function addYellowLayerStickers(indices, facelets) {
+    addYellowEdgeStickers(indices, facelets);
+    Object.keys(CORNER_POSITIONS).forEach(position => {
+        addYellowStickerAtPosition(indices, facelets, position, CORNER_POSITIONS);
+    });
+}
+
 function getAssistFocusFaceletIndices(facelets, mode) {
     const f = cleanFacelets(facelets || latestFacelets || SOLVED_FACELETS);
     if (f.length !== 54) return null;
@@ -2191,21 +2238,17 @@ function getAssistFocusFaceletIndices(facelets, mode) {
         addWhiteEdges(indices, f);
     } else if (mode === 'firstLayer') {
         addWhiteEdges(indices, f);
-        FIRST_LAYER_CORNERS.forEach(corner => {
-            if (isCornerSolved(f, corner)) addCornerByColors(indices, f, corner.colors);
-        });
-        const targetIndex = getFirstUnsolvedCornerIndex(f);
-        if (targetIndex !== -1) addCornerByColors(indices, f, FIRST_LAYER_CORNERS[targetIndex].colors);
+        assistPersistentPartColors.forEach(colors => addCornerByColors(indices, f, colors));
+        if (assistTargetPartColors) addCornerByColors(indices, f, assistTargetPartColors);
     } else if (mode === 'secondLayer') {
         addWhiteLayerPieces(indices, f);
-        SECOND_LAYER_EDGES.forEach(edge => {
-            if (isEdgeSolved(f, edge)) addEdgeByColors(indices, f, edge.colors);
-        });
-        const targetIndex = getFirstUnsolvedSecondLayerEdgeIndex(f);
-        if (targetIndex !== -1) addEdgeByColors(indices, f, SECOND_LAYER_EDGES[targetIndex].colors);
+        assistPersistentPartColors.forEach(colors => addEdgeByColors(indices, f, colors));
+        if (assistTargetPartColors) addEdgeByColors(indices, f, assistTargetPartColors);
     } else if (mode === 'yellowCross') {
-        addYellowEdges(indices, f);
-    } else if (['yellowFace', 'yellowCorners', 'finalEdges'].includes(mode)) {
+        addYellowEdgeStickers(indices, f);
+    } else if (mode === 'yellowFace') {
+        addYellowLayerStickers(indices, f);
+    } else if (['yellowCorners', 'finalEdges'].includes(mode)) {
         addYellowLayerPieces(indices, f);
     } else {
         return null;
@@ -2294,6 +2337,38 @@ function getAssistTargetLabel(facelets, mode) {
     }
 
     return "";
+}
+
+function getAssistTargetPartColors(facelets, mode) {
+    const f = cleanFacelets(facelets || latestFacelets || SOLVED_FACELETS);
+    if (f.length !== 54) return null;
+
+    if (mode === 'firstLayer') {
+        const index = getFirstUnsolvedCornerIndex(f);
+        return index === -1 ? null : FIRST_LAYER_CORNERS[index].colors.slice();
+    }
+    if (mode === 'secondLayer') {
+        const index = getFirstUnsolvedSecondLayerEdgeIndex(f);
+        return index === -1 ? null : SECOND_LAYER_EDGES[index].colors.slice();
+    }
+    return null;
+}
+
+function getAssistPersistentPartColors(facelets, mode) {
+    const f = cleanFacelets(facelets || latestFacelets || SOLVED_FACELETS);
+    if (f.length !== 54) return [];
+
+    if (mode === 'firstLayer') {
+        return FIRST_LAYER_CORNERS
+            .filter(corner => isCornerSolved(f, corner))
+            .map(corner => corner.colors.slice());
+    }
+    if (mode === 'secondLayer') {
+        return SECOND_LAYER_EDGES
+            .filter(edge => isEdgeSolved(f, edge))
+            .map(edge => edge.colors.slice());
+    }
+    return [];
 }
 
 function getAssistInstructionText(mode, stepIndex, targetLabel) {
@@ -3040,11 +3115,15 @@ function startAssistFromFacelets(facelets, mode = 'normal') {
         assistFaceletsSyncPending = false;
         assistInstructionSegments = [];
         assistTargetPartLabel = '';
+        assistTargetPartColors = null;
+        assistPersistentPartColors = [];
         const phase = getAssistPhase(mode);
         assistSequence = phase ? phase.solve(facelets) : solveFacelets(facelets);
         currentAssistStep = 0;
         assistMistakeStack = [];
         assistMode = mode;
+        assistTargetPartColors = getAssistTargetPartColors(latestFacelets, mode);
+        assistPersistentPartColors = getAssistPersistentPartColors(latestFacelets, mode);
         assistTargetPartLabel = getAssistTargetLabel(latestFacelets, mode);
 
         if (focusModeEnabled && phase) {
@@ -3343,14 +3422,18 @@ connectBtn.addEventListener('click', async () => {
 
                 if (appState === 'ASSISTING') {
                     moveLog.textContent = ev.move;
+                    const expected = assistSequence[currentAssistStep];
                     assistInputRevision++;
                     clearTimeout(assistPreviewRestartTimer);
                     assistPreviewRestartTimer = null;
                     assistFaceletsSyncPending = true;
-                    stopAssistPreview(true);
-                    applyRealMoveToVisualizer(ev.move);
-
-                    const expected = assistSequence[currentAssistStep];
+                    const previewCommitted = assistMistakeStack.length === 0 &&
+                        ev.move === expected &&
+                        commitMatchingAssistPreview(ev.move);
+                    if (!previewCommitted) {
+                        stopAssistPreview(true);
+                        applyRealMoveToVisualizer(ev.move);
+                    }
 
                     if (expected && expected.includes('2') && assistMistakeStack.length === 0 && ev.move[0] === expected[0]) {
                         assistSequence[currentAssistStep] = ev.move;

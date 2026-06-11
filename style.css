@@ -132,12 +132,18 @@ button {
     position: relative;
     overscroll-behavior: contain;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .cube-visualizer {
     width: 100%;
     height: 100%;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .cube-visualizer canvas {
@@ -145,12 +151,24 @@ button {
     width: 100%;
     height: 100%;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
 }
 
-.view-reset-btn,
-.focus-mode-btn {
+.viewer-controls {
     position: absolute;
     top: 8px;
+    right: 8px;
+    left: 8px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    z-index: 5;
+    pointer-events: none;
+}
+
+.view-control-btn {
     min-height: 36px;
     padding: 0 12px;
     border: 1px solid rgba(148, 163, 184, 0.45);
@@ -161,17 +179,11 @@ button {
     font-weight: 800;
     cursor: pointer;
     backdrop-filter: blur(8px);
-    z-index: 3;
     white-space: nowrap;
     touch-action: manipulation;
-}
-
-.view-reset-btn {
-    right: 8px;
-}
-
-.focus-mode-btn {
-    left: 8px;
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .focus-mode-btn.active {
@@ -421,30 +433,23 @@ button {
     overflow: hidden;
 }
 
-.label-short {
-    display: none;
-}
-
 @media (max-width: 390px) {
     .app-shell {
         padding-right: max(6px, env(safe-area-inset-right));
         padding-left: max(6px, env(safe-area-inset-left));
     }
 
-    .view-reset-btn,
-    .focus-mode-btn {
+    .viewer-controls {
         top: 6px;
+        right: 6px;
+        left: 6px;
+        gap: 6px;
+    }
+
+    .view-control-btn {
         min-height: 34px;
         padding: 0 8px;
         font-size: 0.72rem;
-    }
-
-    .view-reset-btn {
-        right: 6px;
-    }
-
-    .focus-mode-btn {
-        left: 6px;
     }
 
     .action-grid {
@@ -458,13 +463,6 @@ button {
         white-space: nowrap;
     }
 
-    .label-full {
-        display: none;
-    }
-
-    .label-short {
-        display: inline;
-    }
 }
 
 .btn-connect {
