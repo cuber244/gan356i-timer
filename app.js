@@ -125,7 +125,9 @@ class CustomCubeViewer {
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
         this.normalCameraDistance = 8.5;
-        this.assistCameraDistance = 8.15;
+        this.assistCameraDistance = 8.35;
+        this.minCameraDistance = 5.8;
+        this.maxCameraDistance = 13;
         this.camera.position.set(0, 0, this.normalCameraDistance);
         this.assistViewActive = false;
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -149,6 +151,8 @@ class CustomCubeViewer {
         this.animationHandle = null;
         this.activeMove = null;
         this.drag = null;
+        this.activePointers = new Map();
+        this.pinchDistance = null;
 
         this.createLights();
         this.createCube();
@@ -253,19 +257,46 @@ class CustomCubeViewer {
         this.container.addEventListener('selectstart', ev => ev.preventDefault());
         this.container.addEventListener('dragstart', ev => ev.preventDefault());
         this.container.addEventListener('contextmenu', ev => ev.preventDefault());
+        this.container.addEventListener('wheel', (ev) => {
+            ev.preventDefault();
+            this.zoomBy(ev.deltaY * 0.006);
+        }, { passive: false });
 
         this.container.addEventListener('pointerdown', (ev) => {
+            if (ev.target.closest?.('button')) return;
             if (ev.pointerType === 'mouse' && ev.button !== 0) return;
             ev.preventDefault();
+            this.activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            this.container.setPointerCapture?.(ev.pointerId);
+
+            if (this.activePointers.size >= 2) {
+                this.drag = null;
+                this.pinchDistance = this.getPointerDistance();
+                return;
+            }
+
             this.drag = {
                 pointerId: ev.pointerId,
                 x: ev.clientX,
                 y: ev.clientY
             };
-            this.container.setPointerCapture?.(ev.pointerId);
         });
 
         this.container.addEventListener('pointermove', (ev) => {
+            if (this.activePointers.has(ev.pointerId)) {
+                this.activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
+
+            if (this.activePointers.size >= 2) {
+                ev.preventDefault();
+                const distance = this.getPointerDistance();
+                if (this.pinchDistance && distance) {
+                    this.zoomBy((this.pinchDistance - distance) * 0.012);
+                }
+                this.pinchDistance = distance;
+                return;
+            }
+
             if (!this.drag || ev.pointerId !== this.drag.pointerId) return;
             ev.preventDefault();
             const dx = ev.clientX - this.drag.x;
@@ -279,12 +310,35 @@ class CustomCubeViewer {
         });
 
         const stopDrag = (ev) => {
-            if (!this.drag || ev.pointerId !== this.drag.pointerId) return;
             this.container.releasePointerCapture?.(ev.pointerId);
-            this.drag = null;
+            this.activePointers.delete(ev.pointerId);
+            this.pinchDistance = this.activePointers.size >= 2 ? this.getPointerDistance() : null;
+
+            if (this.activePointers.size === 1) {
+                const [pointerId, point] = this.activePointers.entries().next().value;
+                this.drag = { pointerId, x: point.x, y: point.y };
+            } else if (!this.drag || ev.pointerId === this.drag.pointerId) {
+                this.drag = null;
+            }
         };
         this.container.addEventListener('pointerup', stopDrag);
         this.container.addEventListener('pointercancel', stopDrag);
+    }
+
+    getPointerDistance() {
+        const points = [...this.activePointers.values()];
+        if (points.length < 2) return null;
+        return Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+    }
+
+    zoomBy(delta) {
+        const nextDistance = Math.min(
+            this.maxCameraDistance,
+            Math.max(this.minCameraDistance, this.camera.position.z + delta)
+        );
+        if (nextDistance === this.camera.position.z) return;
+        this.camera.position.z = nextDistance;
+        this.render();
     }
 
     resize() {
