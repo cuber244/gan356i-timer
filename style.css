@@ -186,6 +186,38 @@ button {
     appearance: none;
 }
 
+.zoom-slider-wrap {
+    position: absolute;
+    right: 8px;
+    bottom: 10px;
+    z-index: 5;
+    display: grid;
+    justify-items: center;
+    gap: 4px;
+    padding: 7px 5px;
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    border-radius: 8px;
+    background: rgba(17, 24, 39, 0.82);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 800;
+    backdrop-filter: blur(8px);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+
+.zoom-slider {
+    width: 28px;
+    height: 112px;
+    margin: 0;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    accent-color: var(--blue);
+    cursor: pointer;
+    touch-action: none;
+}
+
 .focus-mode-btn.active {
     border-color: rgba(56, 189, 248, 0.9);
     background: rgba(3, 105, 161, 0.9);
@@ -520,6 +552,15 @@ body.assist-layout #scrambleDisplay {
         min-height: 34px;
         padding: 0 8px;
         font-size: 0.72rem;
+    }
+
+    .zoom-slider-wrap {
+        right: 6px;
+        bottom: 8px;
+    }
+
+    .zoom-slider {
+        height: 96px;
     }
 
     .action-grid {

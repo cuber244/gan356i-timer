@@ -22,8 +22,13 @@
     <section class="visualizer-area" aria-label="仮想キューブ">
         <div id="cubeVisualizer" class="cube-visualizer"></div>
         <div class="viewer-controls">
-            <button class="view-control-btn focus-mode-btn" id="focusModeBtn" type="button" aria-pressed="false">フォーカス OFF</button>
+            <button class="view-control-btn focus-mode-btn active" id="focusModeBtn" type="button" aria-pressed="true">フォーカス ON</button>
             <button class="view-control-btn" id="cameraResetBtn" type="button">視点リセット</button>
+        </div>
+        <div class="zoom-slider-wrap">
+            <span aria-hidden="true">＋</span>
+            <input class="zoom-slider" id="zoomSlider" type="range" min="0" max="100" value="60" aria-label="3Dビューの拡大率">
+            <span aria-hidden="true">−</span>
         </div>
     </section>
 

@@ -105,7 +105,8 @@ const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext')
       solveLogList = getEl('solveLogList'), timerPage = getEl('timerPage'), logPage = getEl('logPage'),
       statusBadge = getEl('statusBadge'), twistyElement = getEl('cubeVisualizer'),
       penaltyGroup = getEl('penaltyGroup'), batteryLevel = getEl('batteryLevel'), cubeMacInput = getEl('cubeMacInput'),
-      cameraResetBtn = getEl('cameraResetBtn'), focusModeBtn = getEl('focusModeBtn');
+      cameraResetBtn = getEl('cameraResetBtn'), focusModeBtn = getEl('focusModeBtn'),
+      zoomSlider = getEl('zoomSlider');
 const stats = {
     pb: getEl('statPb'),
     ao5: getEl('statAo5'),
@@ -130,6 +131,7 @@ class CustomCubeViewer {
         this.maxCameraDistance = 13;
         this.camera.position.set(0, 0, this.normalCameraDistance);
         this.assistViewActive = false;
+        this.onZoomChange = null;
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.setClearColor(0x000000, 0);
@@ -153,6 +155,8 @@ class CustomCubeViewer {
         this.drag = null;
         this.activePointers = new Map();
         this.pinchDistance = null;
+        this.touchPinchActive = false;
+        this.touchPinchDistance = null;
 
         this.createLights();
         this.createCube();
@@ -262,8 +266,43 @@ class CustomCubeViewer {
             this.zoomBy(ev.deltaY * 0.006);
         }, { passive: false });
 
+        // Some iOS Web Bluetooth browsers do not expose two simultaneous Pointer Events.
+        this.container.addEventListener('touchstart', (ev) => {
+            if (ev.target.closest?.('button, input')) return;
+            if (ev.touches.length < 2) return;
+            ev.preventDefault();
+            this.touchPinchActive = true;
+            this.drag = null;
+            this.touchPinchDistance = this.getTouchDistance(ev.touches);
+        }, { passive: false });
+
+        this.container.addEventListener('touchmove', (ev) => {
+            if (!this.touchPinchActive || ev.touches.length < 2) return;
+            ev.preventDefault();
+            const distance = this.getTouchDistance(ev.touches);
+            if (this.touchPinchDistance && distance) {
+                this.zoomBy((this.touchPinchDistance - distance) * 0.012);
+            }
+            this.touchPinchDistance = distance;
+        }, { passive: false });
+
+        const stopTouchPinch = (ev) => {
+            if (!this.touchPinchActive) return;
+            if (ev.touches.length >= 2) {
+                this.touchPinchDistance = this.getTouchDistance(ev.touches);
+                return;
+            }
+            this.touchPinchActive = false;
+            this.touchPinchDistance = null;
+            this.activePointers.clear();
+            this.drag = null;
+        };
+        this.container.addEventListener('touchend', stopTouchPinch, { passive: false });
+        this.container.addEventListener('touchcancel', stopTouchPinch, { passive: false });
+
         this.container.addEventListener('pointerdown', (ev) => {
-            if (ev.target.closest?.('button')) return;
+            if (ev.target.closest?.('button, input')) return;
+            if (this.touchPinchActive) return;
             if (ev.pointerType === 'mouse' && ev.button !== 0) return;
             ev.preventDefault();
             this.activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -283,6 +322,7 @@ class CustomCubeViewer {
         });
 
         this.container.addEventListener('pointermove', (ev) => {
+            if (this.touchPinchActive) return;
             if (this.activePointers.has(ev.pointerId)) {
                 this.activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
             }
@@ -331,6 +371,14 @@ class CustomCubeViewer {
         return Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
     }
 
+    getTouchDistance(touches) {
+        if (touches.length < 2) return null;
+        return Math.hypot(
+            touches[1].clientX - touches[0].clientX,
+            touches[1].clientY - touches[0].clientY
+        );
+    }
+
     zoomBy(delta) {
         const nextDistance = Math.min(
             this.maxCameraDistance,
@@ -338,7 +386,24 @@ class CustomCubeViewer {
         );
         if (nextDistance === this.camera.position.z) return;
         this.camera.position.z = nextDistance;
+        this.notifyZoomChange();
         this.render();
+    }
+
+    setZoomPercent(percent) {
+        const normalized = Math.min(100, Math.max(0, percent)) / 100;
+        this.camera.position.z = this.maxCameraDistance -
+            normalized * (this.maxCameraDistance - this.minCameraDistance);
+        this.notifyZoomChange();
+        this.render();
+    }
+
+    notifyZoomChange() {
+        const range = this.maxCameraDistance - this.minCameraDistance;
+        const percent = range > 0
+            ? (this.maxCameraDistance - this.camera.position.z) / range * 100
+            : 0;
+        this.onZoomChange?.(Math.min(100, Math.max(0, percent)));
     }
 
     resize() {
@@ -476,6 +541,7 @@ class CustomCubeViewer {
     resetCamera() {
         this.camera.position.z = this.assistViewActive ? this.assistCameraDistance : this.normalCameraDistance;
         this.cubeGroup.rotation.set(this.defaultRotation.x, this.defaultRotation.y, this.defaultRotation.z);
+        this.notifyZoomChange();
         this.render?.();
     }
 
@@ -483,6 +549,7 @@ class CustomCubeViewer {
         this.assistViewActive = active;
         this.camera.position.z = active ? this.assistCameraDistance : this.normalCameraDistance;
         this.camera.updateProjectionMatrix();
+        this.notifyZoomChange();
         this.render();
     }
 
@@ -726,6 +793,10 @@ class CustomCubeViewer {
 async function initCustomVisualizer() {
     const THREE = await import(THREE_MODULE_URL);
     customViewer = new CustomCubeViewer(twistyElement, THREE);
+    customViewer.onZoomChange = value => {
+        if (zoomSlider) zoomSlider.value = String(Math.round(value));
+    };
+    customViewer.notifyZoomChange();
 }
 
 visualizerReady = initCustomVisualizer().catch(e => {
@@ -740,7 +811,7 @@ let appState = 'IDLE';
 let solveTimes = JSON.parse(localStorage.getItem(STORAGE_SESSION)) || [];
 let solveLogs = JSON.parse(localStorage.getItem(STORAGE_SOLVE_LOGS)) || [];
 let uuShortcutEnabled = localStorage.getItem(STORAGE_UU_SHORTCUT) !== 'false';
-let focusModeEnabled = false;
+let focusModeEnabled = true;
 
 let scrambleSequence = [], currentScrambleStep = 0, mistakeStack = [];
 let assistSequence = [], currentAssistStep = 0, assistMistakeStack = [];
@@ -856,6 +927,10 @@ logPageBtn?.addEventListener('click', () => showMainPage('log'));
 
 cameraResetBtn.addEventListener('click', () => {
     customViewer?.resetCamera();
+});
+
+zoomSlider?.addEventListener('input', () => {
+    customViewer?.setZoomPercent(Number(zoomSlider.value));
 });
 
 focusModeBtn?.addEventListener('click', () => {
