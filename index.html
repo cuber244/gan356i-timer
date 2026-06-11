@@ -21,6 +21,7 @@
 
     <section class="visualizer-area" aria-label="仮想キューブ">
         <div id="cubeVisualizer" class="cube-visualizer"></div>
+        <button class="focus-mode-btn" id="focusModeBtn" type="button" aria-pressed="false">フォーカスモード OFF</button>
         <button class="view-reset-btn" id="cameraResetBtn" type="button">視点リセット</button>
     </section>
 
@@ -31,7 +32,7 @@
         </div>
 
         <div class="timer-page active" id="timerPage">
-            <div id="scrambleDisplay">Push "Generate Scramble" or [ U U' ]</div>
+            <div id="scrambleDisplay">「スクランブル」または [ U U' ] で開始</div>
 
             <div class="timer-container" id="timerArea">
                 <div id="timerDisplay">0.00</div>
@@ -70,6 +71,7 @@
                 <div class="replay-seek-row">
                     <input id="replaySeekBar" class="replay-seek" type="range" min="0" max="0" value="0" step="10" disabled>
                     <span id="replaySeekTime" class="replay-time">0.00 / 0.00</span>
+                    <button class="mini-btn replay-toggle-btn" id="replayPauseBtn" type="button" disabled>一時停止</button>
                 </div>
                 <div id="solveLogList" class="solve-log-list"></div>
             </div>
@@ -79,7 +81,8 @@
     <nav class="action-grid" aria-label="主要操作">
         <button class="main-btn btn-connect" id="connectBtn" type="button">接続</button>
         <button class="main-btn btn-scramble" id="scrambleBtn" type="button">スクランブル</button>
-        <button class="main-btn btn-assist" id="assistBtn" type="button">アシスト</button>
+        <button class="main-btn btn-assist" id="assistBtn" type="button">最短アシスト</button>
+        <button class="main-btn btn-cross" id="crossAssistBtn" type="button">手順アシスト</button>
         <button class="main-btn btn-more" id="openToolsBtn" type="button">ツール</button>
     </nav>
 </main>
