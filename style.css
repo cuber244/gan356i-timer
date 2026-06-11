@@ -455,6 +455,10 @@ body.assist-layout .stats-strip {
     display: none;
 }
 
+body.assist-layout .app-shell {
+    grid-template-rows: auto minmax(300px, 56dvh) minmax(150px, 1fr) auto;
+}
+
 body.assist-layout .timer-card {
     grid-template-rows: minmax(0, 1fr);
 }
@@ -472,6 +476,16 @@ body.assist-layout #scrambleDisplay {
     padding: 14px 10px;
     font-size: 0.94rem;
     line-height: 1.55;
+}
+
+@media (max-height: 720px) {
+    body.assist-layout .app-shell {
+        grid-template-rows: auto minmax(250px, 52dvh) minmax(130px, 1fr) auto;
+    }
+
+    body.assist-layout #scrambleDisplay {
+        min-height: 130px;
+    }
 }
 
 .main-btn {

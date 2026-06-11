@@ -124,7 +124,10 @@ class CustomCubeViewer {
         this.THREE = THREE;
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-        this.camera.position.set(0, 0, 8.5);
+        this.normalCameraDistance = 8.5;
+        this.assistCameraDistance = 8.15;
+        this.camera.position.set(0, 0, this.normalCameraDistance);
+        this.assistViewActive = false;
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.setClearColor(0x000000, 0);
@@ -417,8 +420,16 @@ class CustomCubeViewer {
     }
 
     resetCamera() {
+        this.camera.position.z = this.assistViewActive ? this.assistCameraDistance : this.normalCameraDistance;
         this.cubeGroup.rotation.set(this.defaultRotation.x, this.defaultRotation.y, this.defaultRotation.z);
         this.render?.();
+    }
+
+    setAssistView(active) {
+        this.assistViewActive = active;
+        this.camera.position.z = active ? this.assistCameraDistance : this.normalCameraDistance;
+        this.camera.updateProjectionMatrix();
+        this.render();
     }
 
     isUpsideDown() {
@@ -758,6 +769,7 @@ function closeAssistModal() {
 
 function setAssistLayout(active) {
     document.body.classList.toggle('assist-layout', active);
+    customViewer?.setAssistView(active);
     if (active) showMainPage('timer');
 }
 
