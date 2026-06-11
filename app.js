@@ -764,7 +764,7 @@ cameraResetBtn.addEventListener('click', () => {
 
 focusModeBtn?.addEventListener('click', () => {
     focusModeEnabled = !focusModeEnabled;
-    focusModeBtn.textContent = `フォーカスモード ${focusModeEnabled ? 'ON' : 'OFF'}`;
+    focusModeBtn.textContent = `フォーカス ${focusModeEnabled ? 'ON' : 'OFF'}`;
     focusModeBtn.classList.toggle('active', focusModeEnabled);
     focusModeBtn.setAttribute('aria-pressed', focusModeEnabled ? 'true' : 'false');
     updateAssistFocusMode();

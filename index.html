@@ -21,7 +21,7 @@
 
     <section class="visualizer-area" aria-label="仮想キューブ">
         <div id="cubeVisualizer" class="cube-visualizer"></div>
-        <button class="focus-mode-btn" id="focusModeBtn" type="button" aria-pressed="false">フォーカスモード OFF</button>
+        <button class="focus-mode-btn" id="focusModeBtn" type="button" aria-pressed="false">フォーカス OFF</button>
         <button class="view-reset-btn" id="cameraResetBtn" type="button">視点リセット</button>
     </section>
 
@@ -80,9 +80,9 @@
 
     <nav class="action-grid" aria-label="主要操作">
         <button class="main-btn btn-connect" id="connectBtn" type="button">接続</button>
-        <button class="main-btn btn-scramble" id="scrambleBtn" type="button">スクランブル</button>
-        <button class="main-btn btn-assist" id="assistBtn" type="button">最短アシスト</button>
-        <button class="main-btn btn-cross" id="crossAssistBtn" type="button">手順アシスト</button>
+        <button class="main-btn btn-scramble" id="scrambleBtn" type="button" aria-label="スクランブル"><span class="label-full">スクランブル</span><span class="label-short">混ぜる</span></button>
+        <button class="main-btn btn-assist" id="assistBtn" type="button" aria-label="最短アシスト"><span class="label-full">最短アシスト</span><span class="label-short">最短</span></button>
+        <button class="main-btn btn-cross" id="crossAssistBtn" type="button" aria-label="手順アシスト"><span class="label-full">手順アシスト</span><span class="label-short">手順</span></button>
         <button class="main-btn btn-more" id="openToolsBtn" type="button">ツール</button>
     </nav>
 </main>

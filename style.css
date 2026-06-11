@@ -161,6 +161,9 @@ button {
     font-weight: 800;
     cursor: pointer;
     backdrop-filter: blur(8px);
+    z-index: 3;
+    white-space: nowrap;
+    touch-action: manipulation;
 }
 
 .view-reset-btn {
@@ -397,8 +400,10 @@ button {
 
 .action-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 8px;
+    width: 100%;
+    min-width: 0;
 }
 
 .main-btn {
@@ -412,6 +417,54 @@ button {
     font-size: 0.92rem;
     line-height: 1.12;
     cursor: pointer;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.label-short {
+    display: none;
+}
+
+@media (max-width: 390px) {
+    .app-shell {
+        padding-right: max(6px, env(safe-area-inset-right));
+        padding-left: max(6px, env(safe-area-inset-left));
+    }
+
+    .view-reset-btn,
+    .focus-mode-btn {
+        top: 6px;
+        min-height: 34px;
+        padding: 0 8px;
+        font-size: 0.72rem;
+    }
+
+    .view-reset-btn {
+        right: 6px;
+    }
+
+    .focus-mode-btn {
+        left: 6px;
+    }
+
+    .action-grid {
+        gap: 4px;
+    }
+
+    .main-btn {
+        min-height: 44px;
+        padding: 3px 1px;
+        font-size: 0.68rem;
+        white-space: nowrap;
+    }
+
+    .label-full {
+        display: none;
+    }
+
+    .label-short {
+        display: inline;
+    }
 }
 
 .btn-connect {
