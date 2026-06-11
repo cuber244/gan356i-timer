@@ -412,10 +412,66 @@ button {
 
 .action-grid {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     width: 100%;
     min-width: 0;
+}
+
+.assist-choice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.assist-choice {
+    min-height: 92px;
+    padding: 12px 8px;
+    border: 0;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+}
+
+.assist-choice strong,
+.assist-choice span {
+    display: block;
+}
+
+.assist-choice strong {
+    font-size: 1rem;
+}
+
+.assist-choice span {
+    margin-top: 6px;
+    font-size: 0.72rem;
+    line-height: 1.35;
+}
+
+body.assist-layout .page-tabs,
+body.assist-layout .timer-container,
+body.assist-layout .penalty-group,
+body.assist-layout .stats-strip {
+    display: none;
+}
+
+body.assist-layout .timer-card {
+    grid-template-rows: minmax(0, 1fr);
+}
+
+body.assist-layout .timer-page.active {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr);
+}
+
+body.assist-layout #scrambleDisplay {
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    max-height: none;
+    padding: 14px 10px;
+    font-size: 0.94rem;
+    line-height: 1.55;
 }
 
 .main-btn {
@@ -467,6 +523,10 @@ button {
 
 .btn-connect {
     background: var(--blue);
+}
+
+.btn-connect.disconnect-active {
+    background: var(--red);
 }
 
 .btn-scramble {

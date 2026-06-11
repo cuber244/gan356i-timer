@@ -89,7 +89,7 @@ function playBeep(freq, type = 'sine', dur = 0.2) {
 // --- DOM Elements ---
 const getEl = id => document.getElementById(id);
 const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
-      assistBtn = getEl('assistBtn'), crossAssistBtn = getEl('crossAssistBtn'),
+      assistBtn = getEl('assistBtn'), shortestAssistBtn = getEl('shortestAssistBtn'), crossAssistBtn = getEl('crossAssistBtn'),
       resetCubeStateBtn = getEl('resetCubeStateBtn'), resetBtn = getEl('resetBtn'), clearSessionBtn = getEl('clearSessionBtn'),
       clearSolveLogsBtn = getEl('clearSolveLogsBtn'),
       replaySpeedSelect = getEl('replaySpeedSelect'), replaySeekBar = getEl('replaySeekBar'), replaySeekTime = getEl('replaySeekTime'),
@@ -98,7 +98,8 @@ const connectBtn = getEl('connectBtn'), scrambleBtn = getEl('scrambleBtn'),
       btnOk = getEl('btnOk'), btnPlus2 = getEl('btnPlus2'), btnDnf = getEl('btnDnf'),
       uuShortcutToggle = getEl('uuShortcutToggle'),
       moreBtn = getEl('moreBtn'), openToolsBtn = getEl('openToolsBtn'),
-      settingsModal = getEl('settingsModal'), closeSettingsBtn = getEl('closeSettingsBtn');
+      settingsModal = getEl('settingsModal'), closeSettingsBtn = getEl('closeSettingsBtn'),
+      assistModal = getEl('assistModal'), closeAssistModalBtn = getEl('closeAssistModalBtn');
 const timerDisplay = getEl('timerDisplay'), timerSubtext = getEl('timerSubtext'),
       scrambleDisplay = getEl('scrambleDisplay'), moveLog = getEl('moveLog'),
       solveLogList = getEl('solveLogList'), timerPage = getEl('timerPage'), logPage = getEl('logPage'),
@@ -668,6 +669,8 @@ visualizerReady = initCustomVisualizer().catch(e => {
 
 // --- State Variables ---
 let cubeConnection = null;
+let cubeEventSubscription = null;
+let cubeConnectionBusy = false;
 let appState = 'IDLE';
 let solveTimes = JSON.parse(localStorage.getItem(STORAGE_SESSION)) || [];
 let solveLogs = JSON.parse(localStorage.getItem(STORAGE_SOLVE_LOGS)) || [];
@@ -743,11 +746,31 @@ function closeSettings() {
     settingsModal.setAttribute('aria-hidden', 'true');
 }
 
+function openAssistModal() {
+    assistModal.classList.add('open');
+    assistModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeAssistModal() {
+    assistModal.classList.remove('open');
+    assistModal.setAttribute('aria-hidden', 'true');
+}
+
+function setAssistLayout(active) {
+    document.body.classList.toggle('assist-layout', active);
+    if (active) showMainPage('timer');
+}
+
 moreBtn.addEventListener('click', openSettings);
 openToolsBtn.addEventListener('click', openSettings);
+assistBtn.addEventListener('click', openAssistModal);
 closeSettingsBtn.addEventListener('click', closeSettings);
+closeAssistModalBtn.addEventListener('click', closeAssistModal);
 settingsModal.addEventListener('click', (ev) => {
     if (ev.target === settingsModal) closeSettings();
+});
+assistModal.addEventListener('click', (ev) => {
+    if (ev.target === assistModal) closeAssistModal();
 });
 
 function showMainPage(page) {
@@ -1166,6 +1189,7 @@ function requestAssistFaceletsAfterSync(nextMode, message, failureMessage) {
             assistFaceletsRequested = false;
             assistRequestType = 'normal';
             appState = 'IDLE';
+            setAssistLayout(false);
             scrambleDisplay.textContent = failureMessage;
             timerSubtext.textContent = e.message;
         });
@@ -3139,6 +3163,7 @@ function startAssistFromFacelets(facelets, mode = 'normal') {
             }
             appState = 'IDLE';
             hideMoveGuide();
+            setAssistLayout(false);
             scrambleDisplay.textContent = phase?.doneMessage || "すでに完成しています";
             timerSubtext.textContent = "";
             return;
@@ -3154,6 +3179,7 @@ function startAssistFromFacelets(facelets, mode = 'normal') {
     } catch (e) {
         appState = 'IDLE';
         hideMoveGuide();
+        setAssistLayout(false);
         scrambleDisplay.textContent = "アシスト手順を計算できませんでした";
         timerSubtext.textContent = e.message;
         if (lastSecondLayerDebug) console.warn("SecondLayer debug\n" + lastSecondLayerDebug);
@@ -3187,6 +3213,7 @@ function checkIsSolved(cleanStr) {
 
 // --- Actions ---
 scrambleBtn.addEventListener('click', () => {
+    setAssistLayout(false);
     initAudio();
     replayToken++;
     activeReplayIndex = null;
@@ -3208,7 +3235,9 @@ scrambleBtn.addEventListener('click', () => {
     renderScrambleUI();
 });
 
-assistBtn.addEventListener('click', async () => {
+shortestAssistBtn.addEventListener('click', async () => {
+    closeAssistModal();
+    setAssistLayout(true);
     initAudio();
     replayToken++;
     activeReplayIndex = null;
@@ -3232,12 +3261,15 @@ assistBtn.addEventListener('click', async () => {
     } catch (e) {
         assistFaceletsRequested = false;
         appState = 'IDLE';
+        setAssistLayout(false);
         scrambleDisplay.textContent = "アシストを開始できませんでした";
         timerSubtext.textContent = e.message;
     }
 });
 
 crossAssistBtn.addEventListener('click', async () => {
+    closeAssistModal();
+    setAssistLayout(true);
     initAudio();
     replayToken++;
     activeReplayIndex = null;
@@ -3262,6 +3294,7 @@ crossAssistBtn.addEventListener('click', async () => {
         assistFaceletsRequested = false;
         assistRequestType = 'normal';
         appState = 'IDLE';
+        setAssistLayout(false);
         scrambleDisplay.textContent = "Crossアシストを開始できませんでした";
         timerSubtext.textContent = e.message;
     }
@@ -3340,19 +3373,78 @@ btnPlus2.addEventListener('click', () => applyPenalty('+2'));
 btnDnf.addEventListener('click', () => applyPenalty('DNF'));
 
 // --- Bluetooth ---
+function updateConnectionUI(connected, busy = false) {
+    cubeConnectionBusy = busy;
+    connectBtn.disabled = busy;
+    connectBtn.textContent = busy ? (connected ? '切断中...' : '接続中...') : (connected ? '切断' : '接続');
+    connectBtn.classList.toggle('disconnect-active', connected);
+    statusBadge.textContent = connected ? 'Connected' : 'Disconnected';
+    statusBadge.className = connected ? 'status-badge connected' : 'status-badge';
+}
+
+function cleanupCubeConnectionUI() {
+    cubeEventSubscription?.unsubscribe?.();
+    cubeEventSubscription = null;
+    cubeConnection = null;
+    clearTimeout(faceletsRefreshTimer);
+    clearTimeout(assistSyncRequestTimer);
+    assistFaceletsRequested = false;
+    assistRequestType = 'normal';
+    assistFaceletsSyncPending = false;
+    appState = 'IDLE';
+    stopActiveTimers();
+    hideMoveGuide();
+    setAssistLayout(false);
+    setBatteryLevel(null);
+    updateConnectionUI(false);
+}
+
+async function disconnectCube() {
+    const connection = cubeConnection;
+    if (!connection || cubeConnectionBusy) return;
+
+    const confirmed = confirm(
+        '警告: キューブとの接続を切断します。\n' +
+        '進行中の計測・スクランブル・アシストは終了します。\n\n切断しますか？'
+    );
+    if (!confirmed) return;
+
+    updateConnectionUI(true, true);
+    try {
+        if (typeof connection.disconnect === 'function') {
+            await connection.disconnect();
+        } else {
+            const device = connection.device || connection.bluetoothDevice;
+            const gatt = connection.gatt || device?.gatt;
+            if (gatt?.connected) gatt.disconnect();
+        }
+    } catch (error) {
+        console.warn('Cube disconnect failed', error);
+    } finally {
+        cleanupCubeConnectionUI();
+        scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
+        timerSubtext.textContent = '';
+    }
+}
+
 connectBtn.addEventListener('click', async () => {
+    if (cubeConnection) {
+        await disconnectCube();
+        return;
+    }
+    if (cubeConnectionBusy) return;
+
     initAudio();
+    updateConnectionUI(false, true);
     try {
         await librariesReady;
         if (!connectGanCube) throw new Error("Bluetooth library is not loaded.");
 
         cubeConnection = await connectGanCube(provideCubeMacAddress);
-        statusBadge.textContent = "Connected";
-        statusBadge.className = "status-badge connected";
-        connectBtn.disabled = true;
+        updateConnectionUI(true);
         setBatteryLevel(null);
 
-        cubeConnection.events$.subscribe((ev) => {
+        cubeEventSubscription = cubeConnection.events$.subscribe((ev) => {
             if (ev.type === "MOVE") {
                 const now = Date.now();
                 const isUuShortcutMove = (ev.move==="U'"&&lastManualMove==="U") || (ev.move==="U"&&lastManualMove==="U'");
@@ -3465,6 +3557,7 @@ connectBtn.addEventListener('click', async () => {
                             assistFaceletsSyncPending = false;
                             finalVisualizerSyncRequested = true;
                             hideMoveGuide();
+                            setAssistLayout(false);
                             scrambleDisplay.textContent = "完成手順が完了しました";
                             timerSubtext.textContent = "物理キューブの状態を同期中...";
                             requestFinalVisualizerSyncAfterDelay();
@@ -3503,11 +3596,9 @@ connectBtn.addEventListener('click', async () => {
             } else if (ev.type === "BATTERY") {
                 setBatteryLevel(ev.batteryLevel);
             } else if (ev.type === "DISCONNECT") {
-                statusBadge.textContent = "Disconnected";
-                statusBadge.className = "status-badge";
-                connectBtn.disabled = false;
-                setBatteryLevel(null);
-                hideMoveGuide();
+                cleanupCubeConnectionUI();
+                scrambleDisplay.textContent = IDLE_SCRAMBLE_TEXT;
+                timerSubtext.textContent = '';
             } else if (ev.type === "FACELETS") {
                 showFaceletsLog(ev.facelets);
                 latestFacelets = cleanFacelets(ev.facelets);
@@ -3585,6 +3676,7 @@ connectBtn.addEventListener('click', async () => {
         await requestBatteryLevel();
         await requestCurrentFacelets();
     } catch (e) {
+        cleanupCubeConnectionUI();
         alert("Connection Error: " + e.message);
     }
 });

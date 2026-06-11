@@ -82,12 +82,30 @@
 
     <nav class="action-grid" aria-label="主要操作">
         <button class="main-btn btn-connect" id="connectBtn" type="button">接続</button>
-        <button class="main-btn btn-scramble" id="scrambleBtn" type="button" aria-label="スクランブル">混ぜる</button>
-        <button class="main-btn btn-assist" id="assistBtn" type="button" aria-label="最短アシスト">最短</button>
-        <button class="main-btn btn-cross" id="crossAssistBtn" type="button" aria-label="手順アシスト">手順</button>
+        <button class="main-btn btn-scramble" id="scrambleBtn" type="button">計測</button>
+        <button class="main-btn btn-assist" id="assistBtn" type="button">アシスト</button>
         <button class="main-btn btn-more" id="openToolsBtn" type="button">ツール</button>
     </nav>
 </main>
+
+<div class="modal-backdrop" id="assistModal" aria-hidden="true">
+    <section class="settings-sheet assist-sheet" role="dialog" aria-modal="true" aria-labelledby="assistModalTitle">
+        <div class="sheet-header">
+            <h2 id="assistModalTitle">アシストを選択</h2>
+            <button class="icon-btn" id="closeAssistModalBtn" type="button" aria-label="閉じる">×</button>
+        </div>
+        <div class="assist-choice-grid">
+            <button class="assist-choice btn-assist" id="shortestAssistBtn" type="button">
+                <strong>最短</strong>
+                <span>最短経路で完成まで案内</span>
+            </button>
+            <button class="assist-choice btn-cross" id="crossAssistBtn" type="button">
+                <strong>CFOP手順</strong>
+                <span>段階ごとに分かりやすく案内</span>
+            </button>
+        </div>
+    </section>
+</div>
 
 <div class="modal-backdrop" id="settingsModal" aria-hidden="true">
     <section class="settings-sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
